@@ -2,36 +2,25 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
+import { fetchApi } from '@/lib/api/client'
 import type { Entity, EntityMention, EntityConnectionNode } from '@/types/entities'
 
 export function useEntity(entityId: string) {
-  const { data: entity, isLoading } = useQuery<Entity>({
+  const { data: entity, isLoading: entityLoading } = useQuery<Entity>({
     queryKey: ['entity', entityId],
-    queryFn: async () => {
-      const res = await fetch(`/api/entity/${entityId}`)
-      if (!res.ok) throw new Error('Entity fetch failed')
-      return res.json()
-    },
+    queryFn: () => fetchApi<Entity>(`/api/entity/${entityId}`),
     enabled: !!entityId,
   })
 
-  const { data: mentions } = useQuery<EntityMention[]>({
+  const { data: mentions, isLoading: mentionsLoading } = useQuery<EntityMention[]>({
     queryKey: ['entity', entityId, 'mentions'],
-    queryFn: async () => {
-      const res = await fetch(`/api/entity/${entityId}?include=mentions`)
-      if (!res.ok) throw new Error('Mentions fetch failed')
-      return res.json()
-    },
+    queryFn: () => fetchApi<EntityMention[]>(`/api/entity/${entityId}?include=mentions`),
     enabled: !!entityId,
   })
 
-  const { data: connections } = useQuery<EntityConnectionNode[]>({
+  const { data: connections, isLoading: connectionsLoading } = useQuery<EntityConnectionNode[]>({
     queryKey: ['entity', entityId, 'connections'],
-    queryFn: async () => {
-      const res = await fetch(`/api/entity/${entityId}/connections`)
-      if (!res.ok) throw new Error('Connections fetch failed')
-      return res.json()
-    },
+    queryFn: () => fetchApi<EntityConnectionNode[]>(`/api/entity/${entityId}/connections`),
     enabled: !!entityId,
   })
 
@@ -39,6 +28,6 @@ export function useEntity(entityId: string) {
     entity: entity ?? null,
     mentions: mentions ?? [],
     connections: connections ?? [],
-    isLoading,
+    isLoading: entityLoading || mentionsLoading || connectionsLoading,
   }
 }

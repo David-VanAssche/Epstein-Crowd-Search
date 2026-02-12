@@ -2,6 +2,7 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
+import { fetchApi } from '@/lib/api/client'
 
 interface Discovery {
   id: string
@@ -13,14 +14,18 @@ interface Discovery {
   created_at: string
 }
 
+interface TodayInHistoryDocument {
+  id: string
+  filename: string
+  date: string
+  date_extracted?: string | null
+  [key: string]: unknown
+}
+
 export function useDiscoveries() {
   const { data, isLoading } = useQuery<Discovery[]>({
     queryKey: ['discoveries'],
-    queryFn: async () => {
-      const res = await fetch('/api/discoveries')
-      if (!res.ok) throw new Error('Failed to fetch discoveries')
-      return res.json()
-    },
+    queryFn: () => fetchApi<Discovery[]>('/api/discoveries'),
     staleTime: 60_000,
   })
 
@@ -33,11 +38,7 @@ export function useDiscoveries() {
 export function useTodayInHistory() {
   const { data, isLoading } = useQuery({
     queryKey: ['today-in-history'],
-    queryFn: async () => {
-      const res = await fetch('/api/discoveries/today-in-history')
-      if (!res.ok) throw new Error('Failed to fetch')
-      return res.json()
-    },
+    queryFn: () => fetchApi<{ documents: TodayInHistoryDocument[] }>('/api/discoveries/today-in-history'),
     staleTime: 3600_000, // 1 hour
   })
 

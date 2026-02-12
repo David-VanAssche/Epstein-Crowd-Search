@@ -4,7 +4,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useMemo } from 'react'
-import type { SearchFilters, SearchResponse, SearchTab } from '@/types/search'
+import { fetchPaginated } from '@/lib/api/client'
+import type { SearchFilters, SearchResult, SearchTab } from '@/types/search'
 
 export function useSearch() {
   const router = useRouter()
@@ -24,7 +25,7 @@ export function useSearch() {
     tab,
   }), [searchParams, tab])
 
-  const { data, isLoading, error } = useQuery<SearchResponse>({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['search', query, filters, page],
     queryFn: async () => {
       const params = new URLSearchParams()
@@ -33,12 +34,11 @@ export function useSearch() {
       Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined) params.set(key, String(value))
       })
-      const res = await fetch(`/api/search?${params}`)
-      if (!res.ok) throw new Error('Search failed')
-      return res.json()
+      return fetchPaginated<SearchResult>(`/api/search?${params}`)
     },
     enabled: query.length > 0,
     staleTime: 30_000,
+    placeholderData: (prev) => prev,
   })
 
   const setQuery = useCallback((newQuery: string) => {
@@ -71,8 +71,8 @@ export function useSearch() {
     tab,
     page,
     filters,
-    results: data?.results ?? [],
-    totalCount: data?.total_count ?? 0,
+    results: data?.items ?? [],
+    totalCount: data?.total ?? 0,
     isLoading,
     error,
     setQuery,

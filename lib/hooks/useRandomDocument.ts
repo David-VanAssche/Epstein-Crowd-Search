@@ -3,6 +3,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useCallback, useState } from 'react'
+import { fetchApi } from '@/lib/api/client'
 
 export function useRandomDocument() {
   const router = useRouter()
@@ -11,12 +12,9 @@ export function useRandomDocument() {
   const goToRandom = useCallback(async () => {
     setIsLoading(true)
     try {
-      const res = await fetch('/api/document/random')
-      if (!res.ok) throw new Error('Failed to get random document')
-      const { id } = await res.json()
-      router.push(`/document/${id}`)
+      const doc = await fetchApi<{ id: string }>('/api/random-document')
+      router.push(`/document/${doc.id}`)
     } catch {
-      // Fallback: show alert if API doesn't exist yet
       alert('Random document feature requires document processing. Check back after funding!')
     } finally {
       setIsLoading(false)
