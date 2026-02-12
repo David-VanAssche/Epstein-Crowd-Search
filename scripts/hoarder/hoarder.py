@@ -95,7 +95,9 @@ def download_github_releases(repo_url: str, dest: str):
 
 
 def download_huggingface(source: dict, temp_dir: str) -> str:
-    """Download a HuggingFace dataset to temp directory."""
+    """Download a HuggingFace dataset using the Python API (no CLI subprocess needed)."""
+    from huggingface_hub import snapshot_download
+
     dest = os.path.join(temp_dir, source["bucket_path"].replace("/", "_"))
     if os.path.exists(dest) and any(Path(dest).iterdir()):
         console.print(f"[yellow]Already downloaded: {dest}[/yellow]")
@@ -103,23 +105,18 @@ def download_huggingface(source: dict, temp_dir: str) -> str:
 
     console.print(f"[cyan]Downloading HuggingFace dataset {source['url']}...[/cyan]")
 
-    cmd = [
-        "huggingface-cli", "download",
-        source["url"],
-        "--repo-type", "dataset",
-        "--local-dir", dest,
-    ]
-
     # If source needs auth, HF_TOKEN env var must be set
-    if source.get("needs_auth"):
-        token = os.environ.get("HF_TOKEN")
-        if not token:
-            console.print(f"[red]Skipping {source['name']}: HF_TOKEN not set (gated dataset)[/red]")
-            raise RuntimeError(f"HF_TOKEN required for {source['name']}")
+    token = os.environ.get("HF_TOKEN")
+    if source.get("needs_auth") and not token:
+        console.print(f"[red]Skipping {source['name']}: HF_TOKEN not set (gated dataset)[/red]")
+        raise RuntimeError(f"HF_TOKEN required for {source['name']}")
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"HuggingFace download failed: {result.stderr}")
+    snapshot_download(
+        repo_id=source["url"],
+        repo_type="dataset",
+        local_dir=dest,
+        token=token,
+    )
 
     return dest
 
