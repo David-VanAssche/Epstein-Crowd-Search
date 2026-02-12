@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Github, ExternalLink, Heart } from 'lucide-react'
+import { Github, Heart } from 'lucide-react'
 
 export function Footer() {
   return (
@@ -55,10 +55,9 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="/prosecutors"
-                  className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+                  href="/about"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <ExternalLink className="h-3.5 w-3.5" />
                   For Prosecutors
                 </Link>
               </li>

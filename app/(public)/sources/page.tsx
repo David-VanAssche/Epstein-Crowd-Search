@@ -1,10 +1,13 @@
 // app/(public)/sources/page.tsx
 'use client'
 
+import { useQuery } from '@tanstack/react-query'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { LoadingState } from '@/components/shared/LoadingState'
+import { fetchApi } from '@/lib/api/client'
 
 const STATUS_COLORS: Record<string, string> = {
   ingested: 'bg-green-500/20 text-green-400 border-green-500/30',
@@ -27,8 +30,13 @@ interface DataSource {
 }
 
 export default function SourcesPage() {
-  // Will fetch from /api/sources in Phase 4
-  const sources: DataSource[] = []
+  const { data: sources, isLoading } = useQuery({
+    queryKey: ['sources'],
+    queryFn: () => fetchApi<DataSource[]>('/api/sources'),
+    staleTime: 60_000,
+  })
+
+  const sourceList = sources ?? []
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 lg:px-8">
@@ -38,7 +46,9 @@ export default function SourcesPage() {
         (OCR text, embeddings, entities) is ingested for free before spending on AI processing.
       </p>
 
-      {sources.length > 0 ? (
+      {isLoading ? (
+        <LoadingState variant="list" count={8} />
+      ) : sourceList.length > 0 ? (
         <Card className="border-border bg-surface">
           <CardContent className="p-0">
             <Table>
@@ -52,7 +62,7 @@ export default function SourcesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sources.map((source) => (
+                {sourceList.map((source) => (
                   <TableRow key={source.id}>
                     <TableCell className="font-medium">
                       {source.url ? (

@@ -4,6 +4,9 @@ import { SearchBar } from '@/components/search/SearchBar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import type { CorpusStats } from '@/types/collaboration'
+
+export const dynamic = 'force-dynamic'
 
 const SAMPLE_SEARCHES = [
   'flight logs passenger list',
@@ -14,12 +17,32 @@ const SAMPLE_SEARCHES = [
   'FBI interview summary',
 ]
 
-export default function HomePage() {
-  // Will fetch from corpus_stats in Phase 4
+async function getStats() {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+      || 'http://localhost:3000'
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 3000)
+    const res = await fetch(`${baseUrl}/api/stats`, {
+      signal: controller.signal,
+      cache: 'no-store',
+    })
+    clearTimeout(timeout)
+    const json = await res.json()
+    if (json.data) return json.data as CorpusStats
+  } catch {
+    // Fall through to defaults
+  }
+  return null
+}
+
+export default async function HomePage() {
+  const corpusStats = await getStats()
   const stats = {
-    chunks: 0,
-    entities: 0,
-    sources_ingested: 0,
+    chunks: corpusStats?.total_chunks ?? 0,
+    entities: corpusStats?.total_entities ?? 0,
+    sources_ingested: corpusStats?.processed_documents ?? 0,
     sources_total: 24,
   }
 

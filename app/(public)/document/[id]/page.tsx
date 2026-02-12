@@ -1,4 +1,5 @@
 // app/(public)/document/[id]/page.tsx
+import { notFound } from 'next/navigation'
 import { DocumentViewer } from '@/components/document/DocumentViewer'
 import { DocumentSummary } from '@/components/document/DocumentSummary'
 import { DocumentMetadata } from '@/components/document/DocumentMetadata'
@@ -6,41 +7,32 @@ import { DocumentCompleteness } from '@/components/document/DocumentCompleteness
 import { ChunkNavigator } from '@/components/document/ChunkNavigator'
 import { RelatedDocuments } from '@/components/document/RelatedDocuments'
 import { ContentWarning } from '@/components/document/ContentWarning'
-import { EmptyState } from '@/components/shared/EmptyState'
+import { AnnotationSidebar } from '@/components/annotations/AnnotationSidebar'
 
 interface DocumentPageProps {
   params: Promise<{ id: string }>
 }
 
+async function getDocument(id: string) {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000'
+    const res = await fetch(`${baseUrl}/api/document/${id}`, { next: { revalidate: 60 } })
+    if (!res.ok) return null
+    const json = await res.json()
+    return json.data ?? null
+  } catch {
+    return null
+  }
+}
+
 export default async function DocumentPage({ params }: DocumentPageProps) {
   const { id } = await params
-
-  // Will fetch from Supabase in Phase 4. For now, return null to show empty state.
-  const document = null as null | {
-    id: string
-    filename: string
-    classification: string | null
-    dataset_name: string | null
-    page_count: number | null
-    date_extracted: string | null
-    ocr_text: string | null
-    is_redacted: boolean
-    metadata: Record<string, unknown>
-    chunks: Array<{ id: string; content: string; page_number: number | null; contextual_header: string | null }>
-    redactions: Array<{ id: string; status: string; page_number: number | null; surrounding_text: string }>
-  }
+  const document = await getDocument(id)
 
   if (!document) {
-    return (
-      <div className="mx-auto max-w-4xl px-4 py-12">
-        <EmptyState
-          variant="not-processed"
-          title="Document Not Yet Available"
-          description="This document hasn't been processed yet, or the ID is invalid. Documents become searchable as they are funded and processed."
-          showFundingCTA
-        />
-      </div>
-    )
+    notFound()
   }
 
   return (
@@ -49,15 +41,16 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
       <div className="flex-1 space-y-6">
         <ContentWarning />
         <DocumentSummary document={document} />
-        <DocumentViewer chunks={document.chunks} />
+        <DocumentViewer chunks={document.chunks ?? []} />
       </div>
 
       {/* Sidebar */}
       <aside className="w-full space-y-6 lg:w-80">
         <DocumentMetadata document={document} />
         <DocumentCompleteness documentId={id} />
-        <ChunkNavigator chunks={document.chunks} />
+        <ChunkNavigator chunks={document.chunks ?? []} />
         <RelatedDocuments documentId={id} />
+        <AnnotationSidebar documentId={id} />
       </aside>
     </div>
   )

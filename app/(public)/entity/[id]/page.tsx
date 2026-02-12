@@ -1,17 +1,27 @@
 // app/(public)/entity/[id]/page.tsx
+'use client'
+
+import { use } from 'react'
 import { EntityProfile } from '@/components/entity/EntityProfile'
 import { EmptyState } from '@/components/shared/EmptyState'
-import type { Entity } from '@/types/entities'
+import { LoadingState } from '@/components/shared/LoadingState'
+import { useEntity } from '@/lib/hooks/useEntity'
 
 interface EntityPageProps {
   params: Promise<{ id: string }>
 }
 
-export default async function EntityPage({ params }: EntityPageProps) {
-  const { id } = await params
+export default function EntityPage({ params }: EntityPageProps) {
+  const { id } = use(params)
+  const { entity, isLoading } = useEntity(id)
 
-  // Will fetch from Supabase in Phase 4
-  const entity: Entity | null = null
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-6 lg:px-8">
+        <LoadingState variant="page" />
+      </div>
+    )
+  }
 
   if (!entity) {
     return (

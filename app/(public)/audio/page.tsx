@@ -1,19 +1,33 @@
 // app/(public)/audio/page.tsx
 'use client'
 
+import { useQuery } from '@tanstack/react-query'
 import { AudioPlaylist } from '@/components/browse/AudioPlaylist'
 import { AudioPlayer } from '@/components/browse/AudioPlayer'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { LoadingState } from '@/components/shared/LoadingState'
+import { fetchPaginated } from '@/lib/api/client'
+import { useAudio } from '@/lib/hooks/useAudio'
+
+interface AudioFileItem {
+  id: string
+  filename: string
+  duration_seconds: number | null
+  transcript: string | null
+  dataset_name: string | null
+  storage_path?: string
+}
 
 export default function AudioPage() {
-  // Will fetch from API in Phase 4
-  const audioFiles: Array<{
-    id: string
-    filename: string
-    duration_seconds: number | null
-    transcript: string | null
-    dataset_name: string | null
-  }> = []
+  const audio = useAudio()
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['audio-files'],
+    queryFn: () => fetchPaginated<AudioFileItem>('/api/audio?per_page=50'),
+    staleTime: 60_000,
+  })
+
+  const audioFiles = data?.items ?? []
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 lg:px-8">
@@ -22,7 +36,9 @@ export default function AudioPage() {
         Court recordings, depositions, and other audio from the Epstein files.
         Each recording includes a searchable AI-generated transcript.
       </p>
-      {audioFiles.length > 0 ? (
+      {isLoading ? (
+        <LoadingState variant="list" count={5} />
+      ) : audioFiles.length > 0 ? (
         <div className="flex flex-col gap-6 lg:flex-row">
           <div className="flex-1">
             <AudioPlaylist files={audioFiles} />

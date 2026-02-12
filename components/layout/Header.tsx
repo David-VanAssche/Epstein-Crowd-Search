@@ -6,31 +6,47 @@ import { usePathname } from 'next/navigation'
 import {
   Search,
   Users,
-  Network,
   Clock,
   ShieldAlert,
   Camera,
-  Map,
+  Plane,
+  Database,
+  Headphones,
   Menu,
   LogIn,
+  LogOut,
+  User,
+  Bell,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/lib/hooks/useAuth'
+import { NotificationDropdown } from '@/components/notifications/NotificationDropdown'
 
 const navItems = [
   { href: '/search', label: 'Search', icon: Search },
   { href: '/entities', label: 'Entities', icon: Users },
-  { href: '/graph', label: 'Graph', icon: Network },
   { href: '/timeline', label: 'Timeline', icon: Clock },
-  { href: '/map', label: 'Map', icon: Map },
   { href: '/redactions', label: 'Redactions', icon: ShieldAlert },
   { href: '/photos', label: 'Photos', icon: Camera },
+  { href: '/audio', label: 'Audio', icon: Headphones },
+  { href: '/flights', label: 'Flights', icon: Plane },
+  { href: '/sources', label: 'Sources', icon: Database },
 ]
 
 export function Header() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { user, isLoading: authLoading, signOut } = useAuth()
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -78,12 +94,52 @@ export function Header() {
 
         {/* Right side */}
         <div className="ml-auto flex items-center space-x-2">
-          <Link href="/login">
-            <Button variant="ghost" size="sm" className="hidden sm:flex gap-1.5">
-              <LogIn className="h-4 w-4" />
-              Sign In
-            </Button>
-          </Link>
+          {!authLoading && user ? (
+            <>
+            <NotificationDropdown />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage src={user.user_metadata?.avatar_url as string} />
+                    <AvatarFallback className="text-xs">
+                      {(user.email?.[0] ?? 'U').toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="hidden sm:inline text-sm">
+                    {(user.user_metadata?.full_name as string) ?? user.email?.split('@')[0]}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem asChild>
+                  <Link href="/profile" className="flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/bookmarks" className="flex items-center gap-2">
+                    <Bell className="h-4 w-4" />
+                    Bookmarks
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={signOut} className="flex items-center gap-2">
+                  <LogOut className="h-4 w-4" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            </>
+          ) : (
+            <Link href="/login">
+              <Button variant="ghost" size="sm" className="hidden sm:flex gap-1.5">
+                <LogIn className="h-4 w-4" />
+                Sign In
+              </Button>
+            </Link>
+          )}
 
           {/* Mobile menu */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -114,14 +170,24 @@ export function Header() {
                   )
                 })}
                 <div className="border-t border-border my-2" />
-                <Link
-                  href="/login"
-                  onClick={() => setMobileOpen(false)}
-                  className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-foreground"
-                >
-                  <LogIn className="h-5 w-5" />
-                  Sign In
-                </Link>
+                {user ? (
+                  <button
+                    onClick={() => { signOut(); setMobileOpen(false) }}
+                    className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-foreground"
+                  >
+                    <LogOut className="h-5 w-5" />
+                    Sign Out
+                  </button>
+                ) : (
+                  <Link
+                    href="/login"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-foreground"
+                  >
+                    <LogIn className="h-5 w-5" />
+                    Sign In
+                  </Link>
+                )}
               </nav>
             </SheetContent>
           </Sheet>

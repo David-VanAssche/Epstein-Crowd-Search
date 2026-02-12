@@ -2,23 +2,44 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { useAuth } from '@/lib/hooks/useAuth'
 
-export default function LoginPage() {
+function LoginPageContent() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const { signInWithOAuth, signInWithEmail } = useAuth()
+  const searchParams = useSearchParams()
+  const authError = searchParams.get('error')
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Phase 4: Supabase auth
+    setError(null)
+    setLoading(true)
+    try {
+      await signInWithEmail(email, password)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sign in failed')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleOAuthLogin = async (provider: 'google' | 'github') => {
-    // Phase 4: Supabase OAuth
+    setError(null)
+    try {
+      await signInWithOAuth(provider)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'OAuth sign in failed')
+    }
   }
 
   return (
@@ -31,6 +52,12 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {(error || authError) && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
+              {error || (authError === 'auth_failed' ? 'Authentication failed. Please try again.' : authError)}
+            </div>
+          )}
+
           {/* OAuth */}
           <Button
             variant="outline"
@@ -64,6 +91,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com"
+                required
               />
             </div>
             <div>
@@ -74,10 +102,11 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
+                required
               />
             </div>
-            <Button type="submit" className="w-full">
-              Sign In
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
 
@@ -95,5 +124,13 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageContent />
+    </Suspense>
   )
 }
