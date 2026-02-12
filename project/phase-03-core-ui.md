@@ -868,7 +868,7 @@ export default function AboutPage() {
         <h2 className="mb-4 text-2xl font-bold">Methodology</h2>
         <div className="space-y-4 text-muted-foreground">
           <p><strong className="text-primary">OCR:</strong> Google Cloud Document AI extracts text with structure preservation.</p>
-          <p><strong className="text-primary">Embeddings:</strong> Google Vertex AI generates 768-dimensional text embeddings and 1408-dimensional image embeddings for semantic search.</p>
+          <p><strong className="text-primary">Embeddings:</strong> Amazon Nova Multimodal Embeddings generates unified 1024-dimensional vectors for text, images, video, and audio — enabling cross-modal semantic search in a single vector space.</p>
           <p><strong className="text-primary">Search:</strong> Hybrid search combining vector similarity (semantic) with BM25 keyword search via Reciprocal Rank Fusion.</p>
           <p><strong className="text-primary">Entities:</strong> AI-powered extraction of people, organizations, locations, and relationships with cross-document deduplication.</p>
           <p><strong className="text-primary">Redactions:</strong> Automated detection and cataloging of redacted regions with context analysis for crowdsourced solving.</p>

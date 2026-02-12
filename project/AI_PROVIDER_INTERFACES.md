@@ -10,8 +10,7 @@ lib/ai/
 ├── factory.ts             # Factory functions that read env vars and return providers
 ├── types.ts               # Shared types (EmbeddingResult, ChatMessage, etc.)
 ├── providers/
-│   ├── google-vertex.ts   # Google Vertex AI text-embedding-004
-│   ├── google-multimodal.ts # Google multimodalembedding@001
+│   ├── amazon-nova.ts     # Amazon Nova Multimodal Embeddings v1 (1024d unified text/image/video/audio)
 │   ├── gemini-flash.ts    # Gemini 2.0 Flash (free tier chat)
 │   ├── anthropic-claude.ts # Claude Sonnet/Opus (paid tier chat)
 │   ├── cohere-reranker.ts # Cohere rerank-english-v3.0
@@ -44,15 +43,15 @@ export interface EmbeddingProvider {
   embedBatch(texts: string[], batchSize?: number): Promise<EmbeddingResult[]>
 }
 
-export interface VisualEmbeddingProvider {
-  readonly name: string
-  readonly dimensions: number
-
-  /** Embed an image from a buffer or URL */
+export interface MultimodalEmbeddingProvider extends EmbeddingProvider {
+  /** Embed an image from a buffer (same vector space as text) */
   embedImage(input: Buffer | string): Promise<EmbeddingResult>
 
-  /** Embed text for cross-modal search (text→image) */
-  embedTextForImageSearch(text: string): Promise<EmbeddingResult>
+  /** Embed a video segment (same vector space as text and images) */
+  embedVideo?(input: Buffer, startSeconds?: number, endSeconds?: number): Promise<EmbeddingResult>
+
+  /** Embed an audio segment (same vector space as text, images, and video) */
+  embedAudio?(input: Buffer): Promise<EmbeddingResult>
 }
 ```
 
@@ -229,7 +228,7 @@ export interface TranscriptionProvider {
 
 import type {
   EmbeddingProvider,
-  VisualEmbeddingProvider,
+  MultimodalEmbeddingProvider,
   ChatProvider,
   RerankProvider,
   OCRProvider,
@@ -240,24 +239,15 @@ import type {
 // Environment-driven provider selection
 // Each factory reads env vars to determine which provider to instantiate
 
-export function getEmbeddingProvider(): EmbeddingProvider {
-  const provider = process.env.EMBEDDING_PROVIDER || 'google-vertex'
+// Returns the unified embedding provider (text + image + video + audio in one 1024d space)
+export function getEmbeddingProvider(): MultimodalEmbeddingProvider {
+  const provider = process.env.EMBEDDING_PROVIDER || 'amazon-nova'
   switch (provider) {
-    case 'google-vertex':
-      return new GoogleVertexEmbedder()
+    case 'amazon-nova':
+      return new AmazonNovaEmbedder()
     // Future: case 'fireworks': return new FireworksEmbedder()
     default:
       throw new Error(`Unknown embedding provider: ${provider}`)
-  }
-}
-
-export function getVisualEmbeddingProvider(): VisualEmbeddingProvider {
-  const provider = process.env.VISUAL_EMBEDDING_PROVIDER || 'google-multimodal'
-  switch (provider) {
-    case 'google-multimodal':
-      return new GoogleMultimodalEmbedder()
-    default:
-      throw new Error(`Unknown visual embedding provider: ${provider}`)
   }
 }
 
@@ -323,8 +313,7 @@ export function getTranscriptionProvider(): TranscriptionProvider {
 
 ```env
 # Provider selection (defaults shown — only set if changing providers)
-EMBEDDING_PROVIDER=google-vertex            # or 'fireworks'
-VISUAL_EMBEDDING_PROVIDER=google-multimodal
+EMBEDDING_PROVIDER=amazon-nova              # Unified 1024d for text/image/video/audio
 FREE_CHAT_PROVIDER=gemini-flash             # or 'fireworks-deepseek'
 PAID_CHAT_PROVIDER=anthropic                # or 'xai'
 RERANK_PROVIDER=cohere
@@ -332,7 +321,12 @@ OCR_PROVIDER=google-document-ai
 TRANSCRIPTION_PROVIDER=whisper
 
 # Provider-specific credentials (only needed for active providers)
-# Google
+# AWS (Amazon Nova embeddings via Bedrock)
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+
+# Google (Document AI for OCR, Gemini for descriptions/chat)
 GOOGLE_APPLICATION_CREDENTIALS=
 GOOGLE_CLOUD_PROJECT_ID=
 GOOGLE_CLOUD_LOCATION=us-central1

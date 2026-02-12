@@ -97,4 +97,4 @@ Before each upload: check `documents` table for existing record. Upsert mode pre
    - Consistent logging and status reporting
    - One `requirements.txt` to manage
 
-3. **Embedding model mismatch:** Community embeddings use nomic-embed-text (768d). Our pipeline spec uses Google Vertex AI text-embedding-004 (768d). Same dimensions but different vector spaces. Store with `embedding_model` metadata so the pipeline knows what to re-embed later.
+3. **Embedding model:** All embeddings use Amazon Nova Multimodal Embeddings v1 (1024d unified space for text/image/video/audio). Community embeddings (nomic-embed-text 768d) are imported with `embedding_model` metadata and re-embedded with Nova during the Phase 6 pipeline pass (~$19 for 365K chunks).

@@ -133,12 +133,12 @@ CREATE TABLE chunks (
   page_range INT4RANGE,
   section_title TEXT,
   hierarchy_path TEXT[],
-  content_embedding VECTOR(768),
+  content_embedding VECTOR(1024),
   content_tsv TSVECTOR,
   char_count INTEGER,
   token_count_estimate INTEGER,
   metadata JSONB DEFAULT '{}',
-  embedding_model TEXT,      -- 'nomic-embed-text' | 'text-embedding-004' | NULL
+  embedding_model TEXT,      -- 'nomic-embed-text' | 'amazon.nova-multimodal-embeddings-v1:0' | NULL
   source TEXT,               -- 'svetfm' | 'benbaessler' | 'pipeline' | NULL
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(document_id, chunk_index)
@@ -178,8 +178,7 @@ CREATE TABLE images (
   page_number INTEGER,
   description TEXT,
   ocr_text TEXT,
-  visual_embedding VECTOR(1408),
-  description_embedding VECTOR(1408),
+  visual_embedding VECTOR(1024),
   is_redacted BOOLEAN DEFAULT false,
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT now()
@@ -195,6 +194,7 @@ CREATE TABLE videos (
   duration_seconds INTEGER,
   transcript TEXT,
   transcript_language TEXT DEFAULT 'en',
+  media_type TEXT DEFAULT 'video' CHECK (media_type IN ('video', 'audio', 'cctv')),
   processing_status TEXT DEFAULT 'pending',
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT now()
@@ -208,7 +208,8 @@ CREATE TABLE video_chunks (
   content TEXT NOT NULL,
   timestamp_start FLOAT,
   timestamp_end FLOAT,
-  content_embedding VECTOR(768),
+  speaker_label TEXT,
+  content_embedding VECTOR(1024),
   content_tsv TSVECTOR,
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(video_id, chunk_index)
@@ -279,7 +280,7 @@ CREATE TABLE entities (
   entity_type TEXT NOT NULL,
   aliases TEXT[] DEFAULT '{}',
   description TEXT,
-  name_embedding VECTOR(768),
+  name_embedding VECTOR(1024),
   first_seen_date TIMESTAMPTZ,
   last_seen_date TIMESTAMPTZ,
   mention_count INTEGER DEFAULT 0,
@@ -342,7 +343,7 @@ CREATE TABLE redactions (
   char_length_estimate INTEGER,
   surrounding_text TEXT NOT NULL,
   sentence_template TEXT,
-  context_embedding VECTOR(768),
+  context_embedding VECTOR(1024),
   co_occurring_entity_ids UUID[],
   document_date TIMESTAMPTZ,
   document_type TEXT,
@@ -427,7 +428,7 @@ CREATE TABLE timeline_events (
   source_chunk_ids UUID[],
   source_document_ids UUID[],
   entity_ids UUID[],
-  content_embedding VECTOR(768),
+  content_embedding VECTOR(1024),
   is_verified BOOLEAN DEFAULT false,
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT now()
@@ -515,14 +516,13 @@ File: `supabase/migrations/00007_search_functions.sql`
 -- Hybrid search with Reciprocal Rank Fusion (text chunks)
 CREATE OR REPLACE FUNCTION hybrid_search_chunks_rrf(
   query_text TEXT,
-  query_embedding VECTOR(768),
+  query_embedding VECTOR(1024),
   match_count INTEGER DEFAULT 20,
   rrf_k INTEGER DEFAULT 60,
   dataset_filter UUID DEFAULT NULL,
   doc_type_filter TEXT DEFAULT NULL,
   date_from TIMESTAMPTZ DEFAULT NULL,
-  date_to TIMESTAMPTZ DEFAULT NULL,
-  embedding_model_filter TEXT DEFAULT NULL
+  date_to TIMESTAMPTZ DEFAULT NULL
 )
 RETURNS TABLE (
   chunk_id UUID,
@@ -556,7 +556,6 @@ AS $$
       AND (doc_type_filter IS NULL OR d.classification = doc_type_filter)
       AND (date_from IS NULL OR d.date_extracted >= date_from)
       AND (date_to IS NULL OR d.date_extracted <= date_to)
-      AND (embedding_model_filter IS NULL OR c.embedding_model = embedding_model_filter)
     ORDER BY c.content_embedding <=> query_embedding
     LIMIT match_count * 2
   ),
@@ -600,16 +599,17 @@ AS $$
   LIMIT match_count;
 $$;
 
--- Multimodal search across documents, images, and video transcripts
+-- Multimodal search across documents, images, video, and audio
+-- Uses unified Nova 1024d embeddings — one query vector searches all modalities
 CREATE OR REPLACE FUNCTION multimodal_search_rrf(
   query_text TEXT,
-  query_embedding_768 VECTOR(768),
-  query_embedding_1408 VECTOR(1408),
+  query_embedding VECTOR(1024),
   match_count INTEGER DEFAULT 20,
   rrf_k INTEGER DEFAULT 60,
   search_documents BOOLEAN DEFAULT true,
   search_images BOOLEAN DEFAULT true,
   search_videos BOOLEAN DEFAULT true,
+  search_audio BOOLEAN DEFAULT true,
   dataset_filter UUID DEFAULT NULL
 )
 RETURNS TABLE (
@@ -629,13 +629,13 @@ AS $$
     SELECT c.id AS result_id, 'document'::TEXT AS source_type,
            c.content, c.document_id, c.page_number,
            NULL::TEXT AS storage_path, d.filename, ds.name AS dataset_name,
-           ROW_NUMBER() OVER (ORDER BY c.content_embedding <=> query_embedding_768) AS rank
+           ROW_NUMBER() OVER (ORDER BY c.content_embedding <=> query_embedding) AS rank
     FROM chunks c
     JOIN documents d ON d.id = c.document_id
     LEFT JOIN datasets ds ON ds.id = d.dataset_id
     WHERE search_documents AND c.content_embedding IS NOT NULL
       AND (dataset_filter IS NULL OR d.dataset_id = dataset_filter)
-    ORDER BY c.content_embedding <=> query_embedding_768
+    ORDER BY c.content_embedding <=> query_embedding
     LIMIT match_count
   ),
   img_semantic AS (
@@ -643,25 +643,38 @@ AS $$
            COALESCE(i.description, i.ocr_text, 'Image') AS content,
            i.document_id, i.page_number,
            i.storage_path, i.filename, ds.name AS dataset_name,
-           ROW_NUMBER() OVER (ORDER BY i.description_embedding <=> query_embedding_1408) AS rank
+           ROW_NUMBER() OVER (ORDER BY i.visual_embedding <=> query_embedding) AS rank
     FROM images i
     LEFT JOIN datasets ds ON ds.id = i.dataset_id
-    WHERE search_images AND i.description_embedding IS NOT NULL
+    WHERE search_images AND i.visual_embedding IS NOT NULL
       AND (dataset_filter IS NULL OR i.dataset_id = dataset_filter)
-    ORDER BY i.description_embedding <=> query_embedding_1408
+    ORDER BY i.visual_embedding <=> query_embedding
     LIMIT match_count
   ),
   vid_semantic AS (
     SELECT vc.id AS result_id, 'video'::TEXT AS source_type,
            vc.content, v.document_id, NULL::INTEGER AS page_number,
            v.storage_path, v.filename, ds.name AS dataset_name,
-           ROW_NUMBER() OVER (ORDER BY vc.content_embedding <=> query_embedding_768) AS rank
+           ROW_NUMBER() OVER (ORDER BY vc.content_embedding <=> query_embedding) AS rank
     FROM video_chunks vc
     JOIN videos v ON v.id = vc.video_id
     LEFT JOIN datasets ds ON ds.id = v.dataset_id
     WHERE search_videos AND vc.content_embedding IS NOT NULL
       AND (dataset_filter IS NULL OR v.dataset_id = dataset_filter)
-    ORDER BY vc.content_embedding <=> query_embedding_768
+    ORDER BY vc.content_embedding <=> query_embedding
+    LIMIT match_count
+  ),
+  audio_semantic AS (
+    SELECT ac.id AS result_id, 'audio'::TEXT AS source_type,
+           ac.content, af.document_id, NULL::INTEGER AS page_number,
+           af.storage_path, af.filename, ds.name AS dataset_name,
+           ROW_NUMBER() OVER (ORDER BY ac.content_embedding <=> query_embedding) AS rank
+    FROM audio_chunks ac
+    JOIN audio_files af ON af.id = ac.audio_id
+    LEFT JOIN datasets ds ON ds.id = af.dataset_id
+    WHERE search_audio AND ac.content_embedding IS NOT NULL
+      AND (dataset_filter IS NULL OR af.dataset_id = dataset_filter)
+    ORDER BY ac.content_embedding <=> query_embedding
     LIMIT match_count
   ),
   all_results AS (
@@ -670,6 +683,8 @@ AS $$
     SELECT *, 1.0 / (rrf_k + rank) AS score FROM img_semantic
     UNION ALL
     SELECT *, 1.0 / (rrf_k + rank) AS score FROM vid_semantic
+    UNION ALL
+    SELECT *, 1.0 / (rrf_k + rank) AS score FROM audio_semantic
   )
   SELECT result_id, source_type, content, document_id, page_number,
          storage_path, filename, dataset_name, score::FLOAT AS rrf_score
@@ -788,7 +803,7 @@ $$;
 
 -- Search entities by name embedding (vector similarity)
 CREATE OR REPLACE FUNCTION search_entities_by_embedding(
-  query_embedding VECTOR(768),
+  query_embedding VECTOR(1024),
   match_count INTEGER DEFAULT 20
 )
 RETURNS TABLE (
@@ -1091,16 +1106,13 @@ File: `supabase/migrations/00010_indexes.sql`
 -- 00010_indexes.sql
 
 -- HNSW indexes (better recall than IVFFlat, works on empty tables)
+-- All embeddings are 1024d Nova vectors in a unified space
 CREATE INDEX idx_chunks_embedding ON chunks USING hnsw (content_embedding vector_cosine_ops);
 CREATE INDEX idx_images_visual_emb ON images USING hnsw (visual_embedding vector_cosine_ops);
-CREATE INDEX idx_images_desc_emb ON images USING hnsw (description_embedding vector_cosine_ops);
 CREATE INDEX idx_entities_name_emb ON entities USING hnsw (name_embedding vector_cosine_ops);
 CREATE INDEX idx_redactions_embedding ON redactions USING hnsw (context_embedding vector_cosine_ops);
 CREATE INDEX idx_timeline_embedding ON timeline_events USING hnsw (content_embedding vector_cosine_ops);
 CREATE INDEX idx_video_chunks_embedding ON video_chunks USING hnsw (content_embedding vector_cosine_ops);
-
--- Partial index for embedding model filtering
-CREATE INDEX idx_chunks_embedding_model ON chunks (embedding_model) WHERE embedding_model IS NOT NULL;
 
 -- GIN indexes (full-text search + trigram)
 CREATE INDEX idx_chunks_tsv ON chunks USING gin (content_tsv);
@@ -1242,8 +1254,8 @@ SELECT
   (SELECT COUNT(*) FROM documents WHERE ocr_source IS NOT NULL AND ocr_source != 'pipeline') AS community_ocr_documents,
   (SELECT SUM(page_count) FROM documents) AS total_pages,
   (SELECT COUNT(*) FROM chunks) AS total_chunks,
-  (SELECT COUNT(*) FROM chunks WHERE embedding_model = 'text-embedding-004') AS target_model_chunks,
-  (SELECT COUNT(*) FROM chunks WHERE embedding_model IS NOT NULL AND embedding_model != 'text-embedding-004') AS community_model_chunks,
+  (SELECT COUNT(*) FROM chunks WHERE embedding_model = 'amazon.nova-multimodal-embeddings-v1:0') AS target_model_chunks,
+  (SELECT COUNT(*) FROM chunks WHERE embedding_model IS NOT NULL AND embedding_model != 'amazon.nova-multimodal-embeddings-v1:0') AS community_model_chunks,
   (SELECT COUNT(*) FROM images) AS total_images,
   (SELECT COUNT(*) FROM videos) AS total_videos,
   (SELECT COUNT(*) FROM entities) AS total_entities,
@@ -1342,7 +1354,7 @@ CREATE TABLE image_match_submissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   submitted_image_path TEXT NOT NULL,
-  submitted_image_embedding VECTOR(1408),
+  submitted_image_embedding VECTOR(1024),
   source_description TEXT NOT NULL,
   source_url TEXT,
   matched_image_id UUID REFERENCES images(id),
@@ -1373,7 +1385,7 @@ CREATE TABLE intelligence_hints (
   status TEXT DEFAULT 'pending',
   created_entity_id UUID REFERENCES entities(id),
   redactions_matched INTEGER DEFAULT 0,
-  hint_embedding VECTOR(768),
+  hint_embedding VECTOR(1024),
   upvotes INTEGER DEFAULT 0,
   downvotes INTEGER DEFAULT 0,
   corroborations INTEGER DEFAULT 0,
@@ -1742,9 +1754,9 @@ CREATE TABLE audio_chunks (
   content TEXT NOT NULL,
   timestamp_start FLOAT,
   timestamp_end FLOAT,
-  content_embedding VECTOR(768),
-  content_tsv TSVECTOR,
   speaker_label TEXT,
+  content_embedding VECTOR(1024),
+  content_tsv TSVECTOR,
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(audio_id, chunk_index)
 );

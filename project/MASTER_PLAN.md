@@ -21,7 +21,7 @@ The platform is designed to maximize community participation in consuming eviden
 | Backend | Supabase (PostgreSQL 15 + pgvector, Auth, Storage, Edge Functions) |
 | Worker | Node.js 20+ standalone pipeline (Express + BullMQ/polling) |
 | Search | pgvector (cosine) + pg_trgm + tsvector (BM25) + RRF fusion |
-| Embeddings | Google Vertex AI text-embedding-004 (768d text), multimodalembedding@001 (1408d images) |
+| Embeddings | Amazon Nova Multimodal Embeddings v1 (1024d unified text/image/video/audio via AWS Bedrock) |
 | OCR | Google Cloud Document AI |
 | Reranking | Cohere rerank-english-v3.0 |
 | Chat LLM | Gemini 2.0 Flash (free tier), Claude Sonnet/Opus (paid tier) |
@@ -107,7 +107,7 @@ Parallel: Steps 3-4 can run concurrently with Steps 5-6 if two engineers availab
 
 ### Key Reconciliation Decisions
 
-1. **Embedding model mismatch**: Community data uses `nomic-embed-text` (768d); our pipeline uses `text-embedding-004` (768d). Vectors stored in same column with `embedding_model` tag. Search filters to same-model vectors at query time. Keyword search works across all chunks regardless.
+1. **Unified embedding model**: All embeddings use Amazon Nova Multimodal Embeddings v1 (1024d) via AWS Bedrock. One model, one vector space for text, images, video, and audio. Community data (nomic-embed-text 768d) is re-embedded with Nova during Phase 6 pipeline processing (~$19 for 365K chunks). The `embedding_model` column tracks which model was used; the pipeline re-embeds any chunk where `embedding_model !== TARGET_MODEL`. Cross-modal search works natively — a text query matches documents, images, video frames, and audio in a single cosine similarity pass.
 2. **Entity deduplication**: `name_normalized` column catches case/whitespace/title differences at ingest time. `pg_trgm` batch job merges similar entities post-ingest. Pipeline embedding-based dedup handles semantic matches.
 3. **HNSW over IVFFlat**: IVFFlat on empty tables creates degenerate indexes. HNSW works at any table size. Can switch back after data loads if memory is tight.
 4. **Worker skip logic**: Pipeline stages check document state before running. Community OCR (especially s0fskr1p's under-redaction text) is never overwritten. Community chunks with embeddings are never deleted.
@@ -296,7 +296,8 @@ A core objective of this platform is to **identify crimes, identify perpetrators
 
 See `.env.example` for the complete list. Key categories:
 - Supabase (URL, anon key, service role key)
-- Google Cloud (Document AI, Vertex AI)
+- AWS Bedrock (region, access key, secret key — for Nova embeddings)
+- Google Cloud (Document AI for OCR)
 - Cohere (reranking)
 - Chat LLMs (Gemini, Anthropic)
 - Application (site URL, GoFundMe URL)

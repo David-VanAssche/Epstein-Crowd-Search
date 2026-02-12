@@ -625,21 +625,9 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient()
 
-    // Detect dominant embedding model and generate query embedding if possible.
-    // Community data uses nomic-embed-text; our pipeline uses text-embedding-004.
-    // Search filters to same-model vectors to avoid comparing incompatible embeddings.
-    const { data: modelStats } = await supabase
-      .from('chunks')
-      .select('embedding_model')
-      .not('embedding_model', 'is', null)
-      .limit(1)
-      // Note: Full implementation uses: SELECT embedding_model, COUNT(*) FROM chunks
-      // GROUP BY embedding_model ORDER BY count DESC LIMIT 1
-      // Simplified here; Phase 6 will add the RPC call with embedding_model_filter.
-
-    const dominantModel = modelStats?.[0]?.embedding_model || null
-    // When embedding API keys are available, generate query embedding with matching model
-    // and call hybrid_search_chunks_rrf with embedding_model_filter = dominantModel.
+    // All embeddings use Amazon Nova Multimodal Embeddings v1 (1024d).
+    // When AWS Bedrock API keys are available, generate query embedding with Nova
+    // and call hybrid_search_chunks_rrf with the 1024d query vector.
     // For now, fall back to keyword-only search.
 
     const offset = (input.page - 1) * input.per_page
@@ -807,8 +795,9 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient()
 
-    // Multimodal search requires embeddings (Phase 5).
-    // For now, do text-only search across chunks, images, and video_chunks.
+    // Multimodal search requires Nova 1024d embeddings (Phase 6).
+    // With unified embeddings, one query vector searches all modalities natively.
+    // For now, do text-only keyword search across chunks, images, and video_chunks.
     const results: MultimodalResult[] = []
 
     // Document search (keyword fallback)

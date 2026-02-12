@@ -102,12 +102,7 @@ This is the highest-value phase. It ingests everything the community has already
    - `source` = 'svetfm'
 4. Update `data_sources` table
 
-**Note:** Our project spec uses Google Vertex AI text-embedding-004 (768d) for embeddings. The svetfm embeddings use nomic-embed-text (also 768d). These are different models — embeddings are NOT interchangeable for cosine similarity search. Options:
-- Store svetfm embeddings in a separate column (`embedding_community`)
-- Re-embed with our target model later when funding is available
-- Use svetfm embeddings as a starting point for basic search (quality will be lower but functional)
-
-**Decision needed:** How to handle mismatched embedding models. Recommend storing them with `embedding_model` metadata so the pipeline knows which to re-process.
+**Note:** Our project uses Amazon Nova Multimodal Embeddings v1 (1024d) for all embeddings. The svetfm embeddings use nomic-embed-text (768d) — these are incompatible (different model, different dimensions). **Decision: Re-embed all community chunks with Nova.** Cost: ~$19 for 365K chunks. The `embedding_model` column tracks which model was used; the Phase 6 worker pipeline automatically re-embeds any chunk where `embedding_model !== 'amazon.nova-multimodal-embeddings-v1:0'`. Community chunks are imported with their nomic-embed-text embeddings and metadata intact, then re-embedded on the first pipeline pass.
 
 ### 1.5: svetfm/epstein-files-nov11-25-house-post-ocr-embeddings
 

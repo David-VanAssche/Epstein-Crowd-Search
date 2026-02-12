@@ -133,11 +133,12 @@ RATE_LIMIT_GOOGLE=300
 RATE_LIMIT_OPENAI=60
 RATE_LIMIT_COHERE=100
 
-# --- Embedding Config ---
-EMBEDDING_MODEL=text-embedding-004
-EMBEDDING_DIMENSIONS=768
-VISUAL_EMBEDDING_MODEL=multimodalembedding@001
-VISUAL_EMBEDDING_DIMENSIONS=1408
+# --- Embedding Config (Amazon Nova Multimodal — unified 1024d for text/image/video/audio) ---
+EMBEDDING_MODEL=amazon.nova-multimodal-embeddings-v1:0
+EMBEDDING_DIMENSIONS=1024
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
 EMBEDDING_BATCH_SIZE=100
 
 # --- Chat Config ---
@@ -227,7 +228,7 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
   {
     stage: PipelineStage.EMBED,
     label: 'Text Embedding',
-    description: 'Generate 768d text embeddings for all chunks',
+    description: 'Generate 1024d Nova embeddings for all chunks (text via AWS Bedrock)',
     dependsOn: [PipelineStage.CONTEXTUAL_HEADERS],
     estimatedCostPerPage: 0.0001,
     idempotent: true,
@@ -236,7 +237,7 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
   {
     stage: PipelineStage.VISUAL_EMBED,
     label: 'Visual Embedding',
-    description: 'Generate 1408d visual + description embeddings for images',
+    description: 'Generate 1024d Nova visual embeddings for images (same unified space as text)',
     dependsOn: [PipelineStage.OCR],
     estimatedCostPerPage: 0.0003,
     idempotent: true,
@@ -2037,35 +2038,72 @@ File: `worker/src/services/embedding-service.ts`
 
 ```typescript
 // worker/src/services/embedding-service.ts
-// Stage 5: Text Embedding — Generate 768d embeddings for all chunks.
-// Uses Google text-embedding-004 via REST API with embedding cache.
+// Stage 5: Embedding — Generate 1024d Nova embeddings for all chunks.
+// Uses Amazon Nova Multimodal Embeddings v1 via AWS Bedrock.
+// Same model handles text, images, video, and audio in a unified 1024d space.
 
 import { SupabaseClient } from '@supabase/supabase-js'
 import { EmbeddingCache } from './embedding-cache.js'
 
-async function embedTexts(texts: string[], apiKey: string): Promise<number[][]> {
+async function embedTexts(texts: string[]): Promise<number[][]> {
+  const region = process.env.AWS_REGION || 'us-east-1'
+  const modelId = process.env.EMBEDDING_MODEL || 'amazon.nova-multimodal-embeddings-v1:0'
+
+  // Nova text embedding via Bedrock InvokeModel
+  // Each text is embedded individually (Nova doesn't support batch in a single call)
+  const results: number[][] = []
+  for (const text of texts) {
+    const body = JSON.stringify({
+      inputText: text,
+      embeddingConfig: { outputEmbeddingLength: 1024 },
+    })
+
+    const response = await fetch(
+      `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // AWS Signature V4 auth handled by @aws-sdk/client-bedrock-runtime in production.
+          // This fetch example is simplified; use BedrockRuntimeClient.invokeModel() instead.
+        },
+        body,
+      }
+    )
+
+    if (!response.ok) {
+      const errText = await response.text()
+      throw new Error(`Nova embedding failed (${response.status}): ${errText}`)
+    }
+
+    const data = await response.json()
+    results.push(data.embedding)
+  }
+  return results
+}
+
+// For images: embed the raw image bytes directly (Nova supports image input natively)
+async function embedImage(imageBase64: string, mimeType: string): Promise<number[]> {
+  const region = process.env.AWS_REGION || 'us-east-1'
+  const modelId = process.env.EMBEDDING_MODEL || 'amazon.nova-multimodal-embeddings-v1:0'
+
+  const body = JSON.stringify({
+    inputImage: imageBase64,
+    embeddingConfig: { outputEmbeddingLength: 1024 },
+  })
+
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents?key=${apiKey}`,
+    `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        requests: texts.map((text) => ({
-          model: 'models/text-embedding-004',
-          content: { parts: [{ text }] },
-          outputDimensionality: 768,
-        })),
-      }),
+      body,
     }
   )
 
-  if (!response.ok) {
-    const errText = await response.text()
-    throw new Error(`Embedding API failed (${response.status}): ${errText}`)
-  }
-
+  if (!response.ok) throw new Error(`Nova image embedding failed: ${response.status}`)
   const data = await response.json()
-  return data.embeddings.map((e: { values: number[] }) => e.values)
+  return data.embedding
 }
 
 function buildEmbeddingInput(content: string, contextualHeader: string | null): string {
@@ -2086,8 +2124,7 @@ export async function handleEmbed(
 ): Promise<void> {
   console.log(`[Embed] Processing document ${documentId}`)
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY
-  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY not set')
+  if (!process.env.AWS_ACCESS_KEY_ID) throw new Error('AWS_ACCESS_KEY_ID not set')
 
   const { data: chunks, error } = await supabase
     .from('chunks')
@@ -2097,7 +2134,7 @@ export async function handleEmbed(
 
   if (error || !chunks) throw new Error(`Failed to fetch chunks: ${error?.message}`)
 
-  const TARGET_MODEL = process.env.EMBEDDING_MODEL || 'text-embedding-004'
+  const TARGET_MODEL = process.env.EMBEDDING_MODEL || 'amazon.nova-multimodal-embeddings-v1:0'
   // Embed chunks that either have no embedding or use a different model (enables upgrades)
   const needsEmbedding = chunks.filter(
     (c) => !c.content_embedding || c.embedding_model !== TARGET_MODEL
@@ -2119,7 +2156,7 @@ export async function handleEmbed(
     const batchInputs = inputs.slice(i, i + BATCH_SIZE)
 
     const embeddings = await embeddingCache.batchGetOrCompute(batchInputs, (texts) =>
-      embedTexts(texts, apiKey)
+      embedTexts(texts)
     )
 
     for (let j = 0; j < batchChunks.length; j++) {
@@ -2151,10 +2188,13 @@ File: `worker/src/services/visual-embedding-service.ts`
 
 ```typescript
 // worker/src/services/visual-embedding-service.ts
-// Generates description embeddings for images extracted from documents.
-// Uses Gemini Vision for descriptions, text-embedding-004 for embeddings.
+// Generates visual embeddings for images using Amazon Nova Multimodal Embeddings.
+// Nova embeds the raw image pixels directly into the same 1024d space as text —
+// no intermediate description step needed for search. Descriptions are still
+// generated (via Gemini Vision) for display purposes but NOT embedded separately.
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { embedImage } from './embedding-service.js'
 
 async function generateImageDescription(
   imageBuffer: Buffer,
@@ -2198,24 +2238,6 @@ Be thorough but factual. 2-4 sentences.`,
   return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No description generated'
 }
 
-async function embedText(text: string, apiKey: string): Promise<number[]> {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'models/text-embedding-004',
-        content: { parts: [{ text }] },
-      }),
-    }
-  )
-
-  if (!response.ok) throw new Error(`Text embedding API failed: ${response.status}`)
-  const data = await response.json()
-  return data.embedding.values
-}
-
 // --- Stage handler ---
 
 export async function handleVisualEmbed(
@@ -2224,12 +2246,12 @@ export async function handleVisualEmbed(
 ): Promise<void> {
   console.log(`[VisualEmbed] Processing images for document ${documentId}`)
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY
-  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY not set')
+  if (!process.env.AWS_ACCESS_KEY_ID) throw new Error('AWS_ACCESS_KEY_ID not set')
+  const geminiKey = process.env.GOOGLE_AI_API_KEY // Optional: for descriptions
 
   const { data: images, error } = await supabase
     .from('images')
-    .select('id, storage_path, file_type, description, description_embedding')
+    .select('id, storage_path, file_type, description, visual_embedding')
     .eq('document_id', documentId)
 
   if (error) throw new Error(`Failed to fetch images: ${error.message}`)
@@ -2240,7 +2262,7 @@ export async function handleVisualEmbed(
 
   let processedCount = 0
   for (const image of images) {
-    if (image.description_embedding) {
+    if (image.visual_embedding) {
       processedCount++
       continue
     }
@@ -2257,16 +2279,22 @@ export async function handleVisualEmbed(
 
       const imageBuffer = Buffer.from(await fileData.arrayBuffer())
       const mimeType = image.file_type || 'image/jpeg'
+      const base64 = imageBuffer.toString('base64')
 
-      const description =
-        image.description || (await generateImageDescription(imageBuffer, mimeType, apiKey))
-      const descriptionEmbedding = await embedText(description, apiKey)
+      // Embed image pixels directly with Nova (same 1024d space as text)
+      const visualEmbedding = await embedImage(base64, mimeType)
+
+      // Generate text description for display (optional, uses Gemini)
+      let description = image.description
+      if (!description && geminiKey) {
+        description = await generateImageDescription(imageBuffer, mimeType, geminiKey)
+      }
 
       const { error: updateError } = await supabase
         .from('images')
         .update({
-          description,
-          description_embedding: JSON.stringify(descriptionEmbedding),
+          ...(description && { description }),
+          visual_embedding: JSON.stringify(visualEmbedding),
         })
         .eq('id', image.id)
 
@@ -2878,24 +2906,11 @@ export async function handleRedactionDetect(
       )
 
       for (const redaction of redactions) {
-        // Generate context embedding for similarity matching
+        // Generate context embedding for similarity matching (Nova 1024d)
         let contextEmbedding: number[] | null = null
         try {
-          const embResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                model: 'models/text-embedding-004',
-                content: { parts: [{ text: redaction.surroundingText }] },
-              }),
-            }
-          )
-          if (embResponse.ok) {
-            const embData = await embResponse.json()
-            contextEmbedding = embData.embedding.values
-          }
+          const [embedding] = await embedTexts([redaction.surroundingText])
+          contextEmbedding = embedding
         } catch {
           // Embedding is optional — continue without it
         }
@@ -4143,26 +4158,16 @@ export const searchDocumentsTool: ChatTool = {
     const query = String(params.query)
     const limit = Number(params.limit) || 10
 
-    // Generate embedding for semantic search
-    const apiKey = process.env.GOOGLE_AI_API_KEY
-    if (!apiKey) return 'Search unavailable: API key not configured'
+    // Generate Nova 1024d embedding for semantic search
+    if (!process.env.AWS_ACCESS_KEY_ID) return 'Search unavailable: AWS credentials not configured'
 
-    const embResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'models/text-embedding-004',
-          content: { parts: [{ text: query }] },
-        }),
-      }
-    )
-
-    if (!embResponse.ok) return 'Search failed: embedding generation error'
-
-    const embData = await embResponse.json()
-    const queryEmbedding = embData.embedding.values
+    let queryEmbedding: number[]
+    try {
+      const [embedding] = await embedTexts([query])
+      queryEmbedding = embedding
+    } catch {
+      return 'Search failed: embedding generation error'
+    }
 
     // Call hybrid search RPC
     const { data: results, error } = await supabase.rpc('hybrid_search_chunks_rrf', {
@@ -4741,7 +4746,7 @@ main().catch(console.error)
 
 3. **Redis is optional.** The `BullMQJobQueue` requires Redis but the `PollingJobQueue` does not. If `REDIS_URL` is not set, the worker automatically falls back to polling the `processing_jobs` table every 5 seconds. Polling works fine for single-worker setups; use BullMQ for multi-worker deployments.
 
-4. **Embedding dimensions must match the database schema.** The `chunks.content_embedding` column is `VECTOR(768)` and `images.description_embedding` is `VECTOR(1408)`. If you pass embeddings of the wrong dimension, Supabase will reject the insert. Double-check that `text-embedding-004` is configured for 768d output (`outputDimensionality: 768`).
+4. **Embedding dimensions must match the database schema.** All embedding columns are `VECTOR(1024)` — text, images, video, audio all use Amazon Nova Multimodal Embeddings v1 in a unified 1024d space. If you pass embeddings of the wrong dimension, Supabase will reject the insert. Ensure Nova is configured for 1024d output (`outputEmbeddingLength: 1024`).
 
 5. **Rate limits are real.** Google AI has per-minute rate limits. The pipeline includes `await new Promise(r => setTimeout(r, 200))` delays between batches. If you see 429 errors, increase the delay or reduce `EMBEDDING_BATCH_SIZE`. Cohere's free tier is 100 requests/minute.
 
@@ -4749,7 +4754,7 @@ main().catch(console.error)
 
 7. **Entity extraction is not idempotent.** Re-running the entity extractor on the same document will create duplicate `entity_mentions` records. The chunker and embedding stages ARE idempotent (they delete and recreate). If you need to re-run entity extraction, first delete existing mentions for that document.
 
-8. **Contextual headers use the Anthropic "Contextual Retrieval" technique.** Each chunk gets a short header that says "This chunk is from document X, section Y, discussing Z." This dramatically improves embedding quality because `text-embedding-004` embeds the header + content together. Without it, a chunk like "He said yes" has no context.
+8. **Contextual headers use the Anthropic "Contextual Retrieval" technique.** Each chunk gets a short header that says "This chunk is from document X, section Y, discussing Z." This dramatically improves embedding quality because Nova embeds the header + content together. Without it, a chunk like "He said yes" has no context.
 
 9. **The cascade engine requires the `find_similar_redactions` RPC.** This function must be created in a Supabase migration (Phase 2) for vector similarity search on the `redactions.context_embedding` column. Without it, the cascade engine logs a warning and returns zero matches.
 
@@ -4832,7 +4837,7 @@ scripts/
 6. Classifier assigns one of 16 document types with confidence score
 7. Smart chunker produces chunks of 400-1500 chars respecting section boundaries
 8. Contextual headers are generated for each chunk (50-100 tokens each)
-9. Text embeddings (768d) are generated and stored for all chunks
+9. Nova 1024d embeddings are generated and stored for all chunks (text and images in same vector space)
 10. Entity extraction finds people, organizations, and locations from chunk text
 11. Relationship mapper creates `entity_relationships` records between co-occurring entities
 12. Redaction detector finds `[REDACTED]` markers and creates `redactions` records
