@@ -26,7 +26,7 @@ from rich.console import Console
 from rich.table import Table
 
 from sources import SOURCES
-from uploader import get_client, ensure_bucket, upload_file, upload_directory, verify_source
+from uploader import get_client, ensure_bucket, upload_directory, verify_source
 from progress import ProgressTracker
 
 console = Console()
