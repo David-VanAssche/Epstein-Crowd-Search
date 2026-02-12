@@ -4,7 +4,7 @@
 
 ## Summary
 
-Implement the full gamification system: XP awarding, level calculation, streak tracking, leaderboards, achievements, and cascade impact visualization. Weave gamification elements into existing pages (redaction dashboard, search, document viewer, profile). This is the engagement driver that makes solving redactions feel as compelling as solving puzzles.
+Implement the full gamification system: XP awarding, level calculation, streak tracking, leaderboards, achievements, cascade impact visualization, research bounty rewards, annotation XP, OCR correction XP, and investigation thread completion bonuses. Weave gamification elements into existing pages (redaction dashboard, search, document viewer, profile). This is the engagement driver that makes solving redactions and building prosecutor-ready evidence feel as compelling as solving puzzles.
 
 ## Checklist
 
@@ -45,6 +45,15 @@ Implement the full gamification system: XP awarding, level calculation, streak t
 | Vote/corroborate | 5 | × 1 |
 | Daily login streak | 5 | × streak length (max 30) |
 | First contribution of day | 10 | × 1 |
+| OCR correction approved | 15 | × 1 |
+| Document review completed | 10 | × checklist items completed |
+| Annotation upvoted (per 5 upvotes) | 5 | × 1 |
+| Research bounty completed | varies | × bounty XP value |
+| Guided investigation completed | 25 | × difficulty level |
+| Photo identification confirmed | 20 | × people identified |
+| Investigation thread followed by 10+ users | 15 | × 1 |
+| Daily challenge solved | 50 | × 1 (bonus on top of normal solve XP) |
+| Fact verified by community | 20 | × 1 |
 
 ### Level System
 
@@ -100,6 +109,15 @@ Implement the full gamification system: XP awarding, level calculation, streak t
     - "Cascade King/Queen" — Highest single cascade chain
     - "Most Wanted" — Solved #1 most impactful redaction
     - "Founding Investigator" — Contributed in first month
+  - Prosecutor Support badges:
+    - "Evidence Builder" — 10 documents fully reviewed (all completeness checks)
+    - "Case Builder" — Created investigation thread followed by 50+ users
+    - "OCR Hero" — 50 OCR corrections approved
+    - "Photo Detective" — Identified people in 25 photos
+    - "Bounty Hunter" — Completed 10 research bounties
+    - "Fact Checker" — 20 verified facts submitted
+    - "Daily Grinder" — Completed 30 daily challenges
+    - "Annotator" — 100 annotations with positive vote balance
 
 ### Leaderboard
 
@@ -171,6 +189,7 @@ Implement the full gamification system: XP awarding, level calculation, streak t
 - [ ] Update `app/(public)/redactions/page.tsx` — Add XP previews
   - "Solving this would earn you ~150 XP and could cascade to 47 others"
   - Show XP amount on each redaction card
+  - Daily challenge prominence with XP bonus indicator
 
 - [ ] Update `components/search/ResultCard.tsx` — Attribution
   - When result was unredacted by user: "Uncovered by @username (Cascade: 23 solves)"
@@ -180,6 +199,10 @@ Implement the full gamification system: XP awarding, level calculation, streak t
   - Solved redactions: green glow with hover tooltip
   - "Solved by @username on Feb 10, 2026. Triggered 12 cascade matches."
 
+- [ ] Update `components/document/DocumentCompleteness.tsx` — XP for reviews
+  - "Complete this review checklist to earn 10 XP per item"
+  - Show which review items are still available
+
 - [ ] Update `app/(auth)/profile/page.tsx` — Full gamification stats
   - XP chart over time
   - Level and XP progress bar
@@ -187,10 +210,24 @@ Implement the full gamification system: XP awarding, level calculation, streak t
   - Cascade impact tree visualization
   - Contribution history with XP earned per action
   - Streak tracker
+  - Investigation threads with follower counts
+  - Bounties completed
+  - OCR corrections made
 
 - [ ] Update `components/chat/ChatMessage.tsx` — Citation attribution
   - When citing unredacted source: mention contributor
   - "This information was uncovered by community contributor @username"
+
+- [ ] Update `app/(public)/bounties/page.tsx` — XP rewards
+  - Show XP reward on each bounty card
+  - Leaderboard of top bounty hunters
+
+- [ ] Update `components/annotations/AnnotationCard.tsx` — XP on upvotes
+  - "+5 XP" indicator when annotation reaches 5 upvote milestones
+
+- [ ] Update `components/engagement/DailyChallenge.tsx` — XP bonus
+  - "Daily Challenge Bonus: +50 XP on top of normal solve rewards"
+  - Streak bonus: consecutive daily challenges multiply XP
 
 ### Gamification API Routes (update stubs from Phase 8)
 

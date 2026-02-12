@@ -18,11 +18,19 @@ Final polish pass: mobile responsive audit, performance optimization, SEO, docum
 - [ ] `app/(public)/entities/page.tsx` — grid 1 col, filters collapse
 - [ ] `app/(public)/graph/page.tsx` — controls overlay simplified, pinch zoom
 - [ ] `app/(public)/timeline/page.tsx` — single column, events full width
+- [ ] `app/(public)/map/page.tsx` — full screen map, controls collapsible
 - [ ] `app/(public)/redactions/page.tsx` — stats stack, feed full width
 - [ ] `app/(public)/funding/page.tsx` — tier cards 1-2 cols, slider full width
 - [ ] `app/(public)/stats/page.tsx` — stat cards stack, progress bars full width
+- [ ] `app/(public)/photos/page.tsx` — single column gallery on mobile
+- [ ] `app/(public)/audio/page.tsx` — full width player, stacked playlists
+- [ ] `app/(public)/flights/page.tsx` — horizontal scroll on table
+- [ ] `app/(public)/bounties/page.tsx` — single column bounty cards
+- [ ] `app/(public)/prosecutors/page.tsx` — stacked sections
 - [ ] `app/(auth)/contribute/page.tsx` — 2×2 grid becomes 1-col stack
+- [ ] `app/(auth)/investigations/page.tsx` — single column thread list
 - [ ] `app/(auth)/profile/page.tsx` — stats stack, contribution list full width
+- [ ] `app/(auth)/pinboard/page.tsx` — simplified pinboard on mobile (list view fallback)
 - [ ] `components/chat/ChatPanel.tsx` — full screen on mobile (not 400px)
 - [ ] `components/layout/Header.tsx` — hamburger menu works correctly
 - [ ] `components/layout/Sidebar.tsx` — full-screen overlay on mobile
@@ -186,6 +194,43 @@ Final polish pass: mobile responsive audit, performance optimization, SEO, docum
   - Mock Supabase client
   - Mock Next.js navigation
 
+### Content Safety & Anti-Disinformation
+
+- [ ] Content sensitivity warning system
+  - Configurable per-user sensitivity level (stored in localStorage)
+  - Documents with disturbing content flagged by worker pipeline
+  - Blur/gate overlay with "This document contains descriptions of [category]. [View anyway]"
+  - Categories: abuse descriptions, exploitation details, graphic testimony
+
+- [ ] Anti-disinformation safeguards
+  - Rate limiting on proposals (max 10/day for new accounts)
+  - Minimum account age (24 hours) before submitting proposals
+  - Automated detection of coordinated voting patterns
+  - "Suspicious activity" flag triggers moderator review
+  - Spam detection on annotations and intelligence hints
+
+- [ ] Audit trail
+  - Every data modification logged with user, timestamp, before/after
+  - Viewable on any record via "History" button
+  - Immutable (append-only)
+
+### Export & Citation
+
+- [ ] Citation export for documents
+  - BibTeX, RIS, Zotero-compatible formats
+  - One-click copy citation to clipboard
+  - Proper formatting for legal, academic, and journalistic use
+
+- [ ] Shareable discovery cards
+  - Auto-generated OG-image cards for confirmed findings
+  - "I helped uncover X connections in the Epstein files" shareable link
+  - Per-investigation-thread share cards
+
+- [ ] RSS feeds
+  - `/api/rss/discoveries` — confirmed solves, new connections
+  - `/api/rss/documents` — newly processed documents
+  - Standard Atom/RSS format for news monitoring tools
+
 ### Final Checks
 
 - [ ] `pnpm build` completes with zero errors
@@ -196,6 +241,8 @@ Final polish pass: mobile responsive audit, performance optimization, SEO, docum
 - [ ] No `console.log` in production code (only `console.error` for actual errors)
 - [ ] All env vars documented in `.env.example`
 - [ ] All placeholder URLs are clearly marked with `TODO:` comments
+- [ ] Content sensitivity warnings work correctly
+- [ ] Anti-disinformation rate limits enforce properly
 
 ## Files to Create
 

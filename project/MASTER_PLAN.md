@@ -4,7 +4,9 @@
 
 ## Project Overview
 
-A production-ready, open-source (MIT) multimodal RAG platform for searching 3.5M pages of Epstein files (DOJ release). Features include AI-powered semantic search, crowdsourced redaction solving, entity relationship mapping, timeline reconstruction, video transcript search, and a chat interface with cited sources.
+A production-ready, open-source (MIT) multimodal RAG platform for searching 3.5M pages of Epstein files (DOJ release). Features include AI-powered semantic search, crowdsourced redaction solving, entity relationship mapping, timeline reconstruction, video/audio transcript search, collaborative annotations, investigation threads, geographic mapping, and a chat interface with cited sources.
+
+The platform is designed to maximize community participation in consuming evidence and contributing to unredaction through familiar UI metaphors, gamification, daily challenges, guided investigations, and collaborative research tools.
 
 **Repository:** `EpsteinCrowdResearch`
 **Domain (placeholder):** `EpsteinArchive.org`
@@ -40,14 +42,14 @@ A production-ready, open-source (MIT) multimodal RAG platform for searching 3.5M
 | Phase | Name | Sessions | Description |
 |---|---|---|---|
 | 1 | Foundation | 1 | Next.js scaffold, deps, design system, shared components, CI/CD |
-| 2 | Database | 1-2 | 15 Supabase migrations, clients, TypeScript types |
-| 3 | Core UI Pages | 2 | Home, Search, Document Viewer, Entity, Datasets, About, Login |
-| 4 | Backend API | 2 | AI abstractions, search lib, all API routes, auth middleware |
-| 5 | Interactive Features | 2 | Chat panel, redaction dashboard, contribution hub, proposals |
-| 6 | Worker Pipeline | 2 | Standalone worker, 10-stage pipeline, chat orchestrator, scripts |
-| 7 | Funding & Stats | 1 | Funding page, impact calculator, spend log, stats page |
-| 8 | Advanced Visualization | 2 | D3 entity graph, timeline view, cascade replay animation |
-| 9 | Polish & Deploy | 1-2 | Responsive audit, performance, SEO, tests, deploy config |
+| 2 | Database | 1-2 | 18 Supabase migrations, clients, TypeScript types |
+| 3 | Core UI Pages | 2 | Home, Search, Document Viewer, Entity, Datasets, About, Login, content-type browse views |
+| 4 | Backend API | 2 | AI abstractions, search lib, all API routes, auth, annotations, notifications |
+| 5 | Interactive Features | 2-3 | Chat, redaction dashboard, contributions, annotations, investigation threads, daily challenges |
+| 6 | Worker Pipeline | 2 | Standalone worker, 10-stage pipeline, chat orchestrator, audio processing, AI summaries |
+| 7 | Funding & Stats | 1 | Funding page, impact calculator, spend log, stats, corpus coverage heatmap |
+| 8 | Advanced Visualization | 2 | D3 entity graph, timeline, cascade replay, geographic map, evidence pinboard |
+| 9 | Polish & Deploy | 1-2 | Responsive audit, performance, SEO, tests, deploy config, content warnings |
 | 10 | Gamification (v2) | 2 | XP, levels, achievements, leaderboard, cascade replay UX |
 
 ## Dependency Graph
@@ -67,16 +69,16 @@ All 1-8 → Phase 9 → Phase 10
 | Phase | Estimated Files |
 |---|---|
 | 1 | ~25 (scaffold, config, shared components, CI/CD) |
-| 2 | ~20 (15 migrations + 3 clients + 5 type files) |
-| 3 | ~25 (7 pages + 15 components + 3 hooks) |
-| 4 | ~25 (AI abstractions + search lib + 15 API routes + middleware) |
-| 5 | ~20 (chat components + redaction + contribution + API routes) |
-| 6 | ~30 (worker scaffold + 10 services + chatbot + scripts) |
-| 7 | ~15 (funding page + components + API routes + stats) |
-| 8 | ~15 (graph + timeline + cascade + researcher pages) |
-| 9 | ~20 (loading states + tests + deploy config + SEO) |
-| 10 | ~15 (gamification components + leaderboard + achievements) |
-| **Total** | **~240 files** |
+| 2 | ~25 (18 migrations + 3 clients + 6 type files) |
+| 3 | ~35 (10 pages + 20 components + 5 hooks) |
+| 4 | ~35 (AI abstractions + search lib + 20 API routes + middleware) |
+| 5 | ~35 (chat + redaction + contribution + annotations + investigation threads) |
+| 6 | ~35 (worker scaffold + 12 services + chatbot + audio + scripts) |
+| 7 | ~20 (funding + stats + coverage heatmap + daily features) |
+| 8 | ~20 (graph + timeline + cascade + map + pinboard) |
+| 9 | ~25 (loading states + tests + deploy config + SEO + safety) |
+| 10 | ~20 (gamification + leaderboard + achievements + bounties) |
+| **Total** | **~275 files** |
 
 ## Directory Structure Summary
 
@@ -164,6 +166,45 @@ epstein-archive/
 14. **Contribution tables** — image_match_submissions, intelligence_hints, contribution_activity
 15. **Gamification tables** — achievements, user_achievements, xp_transactions, weekly_leaderboard view
 
+## Crowdsourced Research Philosophy
+
+The platform is designed around maximizing community contribution at every level:
+
+### Discovery Mechanisms
+- **Random Document** button — surface overlooked evidence through serendipity
+- **"This Day in the Files"** — daily hook showing documents from today's date in history
+- **Daily Challenge** — featured high-cascade-potential redaction rotated daily
+- **Corpus Coverage Heatmap** — shows under-researched areas to direct attention
+- **Smart Priority Queue** — AI-ranked "needs eyes" feed for high-value unreviewed documents
+- **"More Like This"** — semantic similarity to find related documents
+
+### Collaborative Tools
+- **Annotations** — per-paragraph margin notes on documents, visible to all, upvotable
+- **Investigation Threads** — collaborative case files bundling documents, entities, and findings
+- **Evidence Pinboard** — drag-and-drop canvas for building visual connection maps
+- **OCR Correction** — side-by-side original scan + OCR text for crowdsourced fixes
+- **Entity Disambiguation** — community voting to merge/split ambiguous entity records
+- **Photo Identification** — "Who's in this photo?" crowdsourced tagging
+
+### Content-Type Specific Views
+- **Photo Gallery** — Google Photos-style grid with filtering and lightbox
+- **Flight Log Explorer** — structured table view with passenger filtering
+- **Audio Player** — Spotify-style interface for court recordings and depositions
+- **Document Comparison** — side-by-side diff view for comparing document versions
+
+### Engagement & Retention
+- **Guided Investigations** — tutorial missions that teach the platform through real research tasks
+- **Research Bounties** — targeted requests for investigation on specific entities or questions
+- **Notification Center** — alerts for proposals, annotations, saved search matches
+- **Saved Search Alerts** — email/in-app notifications when new matching documents are processed
+- **Shareable Discovery Cards** — social media cards for confirmed findings
+
+### Trust & Verification
+- **Source Provenance Chain** — full audit trail for every data point
+- **Fact Registry** — verified facts with supporting evidence and confidence levels
+- **Content Sensitivity Warnings** — configurable warnings for disturbing content
+- **Anti-Disinformation Safeguards** — rate limits, minimum account age, coordinated voting detection
+
 ## Agent Onboarding Protocol
 
 Any new Claude agent working on this project:
@@ -175,6 +216,18 @@ Any new Claude agent working on this project:
 5. Read `project/AI_PROVIDER_INTERFACES.md` — if working on AI integration
 6. Mark checklist items `- [x]` when complete
 7. Leave `<!-- NOTE: reason -->` HTML comments if something is incomplete or deferred
+
+## Prosecutorial Goal
+
+A core objective of this platform is to **identify crimes, identify perpetrators, and prepare the evidence so prosecutors can act on it**. Every feature should move toward this goal:
+
+- **Entity dossiers** auto-compile all evidence for a person into a prosecutor-ready brief with full citations
+- **Criminal activity indicator scoring** flags documents and entities with patterns suggesting trafficking, obstruction, conspiracy, and financial crimes
+- **Evidence chain tracking** maintains source provenance for every data point so findings are admissible
+- **Prosecutor dashboard** provides a dedicated interface for law enforcement with exportable evidence packages
+- **Investigation threads** allow researchers to build collaborative case files that prosecutors can follow
+- **Fact registry** maintains a verified-fact database with community confidence levels
+- The platform does "most of the work" so that prosecutors can focus on legal strategy rather than evidence discovery
 
 ## Critical Requirements
 

@@ -1,10 +1,10 @@
 # Phase 5: Interactive Features
 
-> **Sessions:** 2 | **Dependencies:** Phase 3 (UI pages), Phase 4 (API routes) | **Parallel with:** Phase 7 (Funding)
+> **Sessions:** 2-3 | **Dependencies:** Phase 3 (UI pages), Phase 4 (API routes) | **Parallel with:** Phase 7 (Funding)
 
 ## Summary
 
-Build the chat panel (available on every page), redaction dashboard, contribution hub with all 4 contribution types, proposals/voting page, user profile, and saved searches/bookmarks. These are the interactive features that drive engagement and crowdsourced contribution.
+Build the chat panel (available on every page), redaction dashboard, contribution hub with all 4 contribution types, collaborative annotation system, investigation threads, OCR correction interface, photo identification, entity disambiguation, document comparison view, research bounties, daily challenges, notification center, guided investigation tutorials, and user profile. These are the interactive features that drive engagement and crowdsourced contribution toward the goal of identifying perpetrators and preparing prosecutor-ready evidence.
 
 ## Checklist
 
@@ -155,12 +155,148 @@ Build the chat panel (available on every page), redaction dashboard, contributio
 - [ ] `components/contribute/IntelligenceHintForm.tsx` — Structured hint form
 - [ ] `components/contribute/EvidenceAttacher.tsx` — URL, screenshot, doc ref attacher
 - [ ] `components/contribute/ContributionImpactView.tsx` — "Your contribution unlocked X connections"
+- [ ] `components/contribute/PhotoIdentifier.tsx` — "Who's in this photo?" tagging interface
+  - Show photo with face/person bounding boxes
+  - Users tag each person with entity name (search existing or create new)
+  - Community verification via voting
 
 ### Contribution API Routes
 
 - [ ] `app/api/contribute/unredact/route.ts` — Direct unredaction submission (auth required)
 - [ ] `app/api/contribute/image-match/route.ts` — Image upload + visual similarity match (auth required)
 - [ ] `app/api/contribute/intelligence/route.ts` — Submit intelligence hint (auth required)
+- [ ] `app/api/contribute/photo-id/route.ts` — Photo identification submission (auth required)
+
+### Collaborative Annotations
+
+- [ ] `components/annotations/AnnotationLayer.tsx` — Document annotation overlay
+  - Floating margin notes alongside document text
+  - Highlight text → "Add annotation" popover
+  - Annotation types: question, observation, correction, connection
+  - Upvote/downvote annotations
+  - Reply threads on annotations
+
+- [ ] `components/annotations/AnnotationCard.tsx` — Individual annotation card
+  - User avatar, timestamp, annotation type badge
+  - Content with markdown rendering
+  - Vote buttons, reply button
+  - "Flag" button for inappropriate content
+
+- [ ] `components/annotations/AnnotationSidebar.tsx` — All annotations for a document
+  - Filterable by type (question, observation, correction, connection)
+  - Sortable by newest, most upvoted
+  - Jump-to annotation on click
+
+### Investigation Threads
+
+- [ ] `app/(auth)/investigations/page.tsx` — Investigation threads directory
+  - List of public investigation threads
+  - Filter: active, completed, my threads, following
+  - Sort: newest, most followed, most items
+  - "Start New Investigation" button
+  - Featured investigations section
+
+- [ ] `app/(auth)/investigations/[id]/page.tsx` — Investigation thread detail
+  - Thread header: title, creator, description, follower count, fork button
+  - Items feed: documents, entities, timeline events, annotations, researcher notes
+  - Add item interface (search for documents/entities to pin, or write notes)
+  - Discussion section (threaded comments)
+  - "Export as Report" button (PDF/Markdown)
+  - Conclusion summary (editable by creator)
+  - Follow/unfollow button
+
+- [ ] `components/investigations/InvestigationCard.tsx` — Thread preview card
+- [ ] `components/investigations/InvestigationTimeline.tsx` — Thread items as visual timeline
+- [ ] `components/investigations/AddItemDialog.tsx` — Search and add items to thread
+
+### OCR Correction Interface
+
+- [ ] `app/(auth)/contribute/ocr-correction/page.tsx` — OCR correction tool
+  - Side-by-side: original scanned page image | OCR text output
+  - Inline editing of OCR text with diff tracking
+  - "Smart queue" — prioritizes low-confidence OCR pages
+  - Submit correction → community review
+  - Supports handwritten note transcription (OCR often fails on these)
+
+- [ ] `components/contribute/OCRCorrectionView.tsx` — Side-by-side correction interface
+- [ ] `components/contribute/OCRDiffView.tsx` — Shows original vs. corrected text diff
+
+### Entity Disambiguation
+
+- [ ] `components/entity/EntityDisambiguation.tsx` — Merge/split voting interface
+  - When system detects potential duplicates (e.g., "J. Smith" vs "John Smith")
+  - Shows both entity profiles side-by-side
+  - "Same person" / "Different people" vote buttons
+  - Evidence snippets from both entities
+  - Used in entity profile page as alert banner
+
+### Document Comparison View
+
+- [ ] `app/(public)/compare/page.tsx` — Side-by-side document comparison
+  - Two document viewers side-by-side
+  - Text diff highlighting (additions in green, removals in red)
+  - Useful for comparing different DOJ releases of same document (different redactions)
+  - URL params: `?left=doc_id&right=doc_id`
+
+- [ ] `components/document/DocumentDiff.tsx` — Diff visualization component
+
+### Research Bounties
+
+- [ ] `app/(public)/bounties/page.tsx` — Research bounties board
+  - Open bounties sorted by XP reward and urgency
+  - Filter by: entity, topic, difficulty, bounty amount
+  - Each bounty: title, description, target entities, XP reward, expiry
+  - "Claim this bounty" button (auth required)
+  - Bounty creator can mark as completed
+
+- [ ] `components/bounties/BountyCard.tsx` — Bounty preview card
+- [ ] `components/bounties/BountyDetail.tsx` — Full bounty with evidence requirements
+- [ ] `components/bounties/CreateBountyForm.tsx` — Create new bounty (level 3+)
+
+### Daily Challenge
+
+- [ ] `components/engagement/DailyChallenge.tsx` — Featured redaction of the day
+  - Rotated daily, selected by highest cascade potential + good context clues
+  - Prominent placement on home page and redaction dashboard
+  - Countdown timer to next challenge
+  - Community solve counter ("47 people attempted today")
+  - XP bonus for daily challenge solves
+
+- [ ] `components/engagement/ThisDayInFiles.tsx` — "This Day in the Files"
+  - Documents dated on today's month+day from any year
+  - "On this day in 2003, these documents were created..."
+  - Shown on home page and discoveries feed
+
+### Guided Investigations / Tutorial Missions
+
+- [ ] `app/(auth)/guided/page.tsx` — Guided investigation missions
+  - Pre-built investigation paths for onboarding
+  - Step-by-step: search → find entity → check connections → attempt redaction
+  - Difficulty levels: Beginner, Intermediate, Advanced
+  - XP rewards for completion
+  - Teaches platform features through real research tasks
+
+- [ ] `components/engagement/GuidedMission.tsx` — Step-by-step mission UI
+- [ ] `components/engagement/MissionProgress.tsx` — Progress tracker for current mission
+
+### Notification Center
+
+- [ ] `components/notifications/NotificationCenter.tsx` — Bell icon + dropdown
+  - Unread count badge on bell icon
+  - Notification types: proposal updates, annotation replies, search alerts, achievements, bounties
+  - Mark as read / mark all as read
+  - Click notification → navigate to relevant page
+  - Settings: configure which notifications to receive
+
+- [ ] `components/notifications/NotificationItem.tsx` — Individual notification
+- [ ] `components/notifications/NotificationSettings.tsx` — Preferences panel
+
+### Saved Search Alerts
+
+- [ ] Update saved searches to support alerts
+  - Toggle: "Alert me when new results match this search"
+  - Frequency: immediate, daily digest, weekly digest
+  - Alert appears in notification center
 
 ### Proposals & Voting
 
@@ -168,6 +304,7 @@ Build the chat panel (available on every page), redaction dashboard, contributio
   - List of pending proposals with filters
   - Inline voting interface
   - Sort by: newest, highest confidence, most votes
+  - "Needs independent verification" flag for high-stakes proposals
   - Auth required
 
 ### User Profile
@@ -177,16 +314,20 @@ Build the chat panel (available on every page), redaction dashboard, contributio
   - Stats dashboard: proposals submitted/confirmed, cascades triggered, accuracy rate
   - Reputation tier badge
   - Contribution history (chronological feed)
-  - Saved searches list
+  - Investigation threads (created, following)
+  - Annotations (most upvoted)
+  - Saved searches list with alert toggles
   - Bookmarked documents/entities
   - XP/level display (placeholder for Phase 10)
+  - "Export My Contributions" button
 
 ### Saved Searches & Bookmarks
 
 - [ ] `app/(auth)/saved/page.tsx` — Saved searches and bookmarks
-  - Two tabs: Saved Searches, Bookmarks
-  - Saved searches: list with query, filters, date saved, "Run again" button
+  - Three tabs: Saved Searches, Bookmarks, Investigation Threads
+  - Saved searches: list with query, filters, date saved, "Run again" button, alert toggle
   - Bookmarks: list with document/entity/chunk cards, notes, date saved
+  - Investigation threads: threads I created or follow
   - Delete/remove actions
 
 ### Hooks
@@ -195,6 +336,17 @@ Build the chat panel (available on every page), redaction dashboard, contributio
   - Fetch redactions (solvable feed, by document)
   - Submit proposal
   - Vote on proposal
+- [ ] `lib/hooks/useAnnotations.ts` — Annotation state management
+  - Fetch annotations for document
+  - Create, vote, reply
+- [ ] `lib/hooks/useInvestigation.ts` — Investigation thread state
+  - CRUD for threads and items
+  - Follow/unfollow
+- [ ] `lib/hooks/useNotifications.ts` — Notification state
+  - Fetch notifications, unread count
+  - Mark as read
+- [ ] `lib/hooks/useBounties.ts` — Bounty state
+  - Fetch open bounties, claim, complete
 
 ## Files to Create
 
@@ -221,9 +373,42 @@ components/contribute/
 ├── ImageComparisonView.tsx
 ├── IntelligenceHintForm.tsx
 ├── EvidenceAttacher.tsx
-└── ContributionImpactView.tsx
-app/(public)/redactions/
-└── page.tsx
+├── ContributionImpactView.tsx
+├── PhotoIdentifier.tsx
+├── OCRCorrectionView.tsx
+└── OCRDiffView.tsx
+components/annotations/
+├── AnnotationLayer.tsx
+├── AnnotationCard.tsx
+└── AnnotationSidebar.tsx
+components/investigations/
+├── InvestigationCard.tsx
+├── InvestigationTimeline.tsx
+└── AddItemDialog.tsx
+components/bounties/
+├── BountyCard.tsx
+├── BountyDetail.tsx
+└── CreateBountyForm.tsx
+components/engagement/
+├── DailyChallenge.tsx
+├── ThisDayInFiles.tsx
+├── GuidedMission.tsx
+└── MissionProgress.tsx
+components/notifications/
+├── NotificationCenter.tsx
+├── NotificationItem.tsx
+└── NotificationSettings.tsx
+components/entity/
+└── EntityDisambiguation.tsx
+components/document/
+├── DocumentDiff.tsx
+app/(public)/
+├── redactions/
+│   └── page.tsx
+├── bounties/
+│   └── page.tsx
+├── compare/
+│   └── page.tsx
 app/(auth)/
 ├── contribute/
 │   ├── page.tsx
@@ -231,8 +416,16 @@ app/(auth)/
 │   │   └── page.tsx
 │   ├── image-match/
 │   │   └── page.tsx
-│   └── intelligence/
+│   ├── intelligence/
+│   │   └── page.tsx
+│   └── ocr-correction/
 │       └── page.tsx
+├── investigations/
+│   ├── page.tsx
+│   └── [id]/
+│       └── page.tsx
+├── guided/
+│   └── page.tsx
 ├── proposals/
 │   └── page.tsx
 ├── profile/
@@ -244,11 +437,17 @@ app/api/contribute/
 │   └── route.ts
 ├── image-match/
 │   └── route.ts
-└── intelligence/
+├── intelligence/
+│   └── route.ts
+└── photo-id/
     └── route.ts
 lib/hooks/
 ├── useChat.ts
-└── useRedaction.ts
+├── useRedaction.ts
+├── useAnnotations.ts
+├── useInvestigation.ts
+├── useNotifications.ts
+└── useBounties.ts
 ```
 
 ## Acceptance Criteria
@@ -257,16 +456,27 @@ lib/hooks/
 2. ChatPanel slides open (400px from right) with message UI
 3. Chat input accepts text and sends (SSE streaming from API)
 4. Source citations appear below AI messages as clickable chips
-5. Redaction dashboard shows progress bar and solvable feed
-6. Contribution hub displays 4 type cards in 2×2 grid
+5. Redaction dashboard shows progress bar, solvable feed, and daily challenge
+6. Contribution hub displays contribution type cards
 7. All contribution forms validate required fields before submission
 8. Auth redirect works (unauthenticated users → login → return to page)
 9. Proposals page lists pending proposals with voting UI
-10. User profile shows stats and contribution history
-11. Saved searches and bookmarks are listable and deletable
+10. User profile shows stats, contributions, investigation threads, annotations
+11. Saved searches support alert toggles
 12. All contribution API routes require authentication (401 without)
 13. Image matcher shows drag-and-drop upload area
 14. Intelligence hint form shows conditional fields based on hint type
+15. Annotation layer renders margin notes on document viewer
+16. Annotations can be created, voted, and replied to
+17. Investigation threads can be created, followed, and items added
+18. OCR correction view shows side-by-side original scan vs. OCR text
+19. Entity disambiguation shows merge candidates with voting
+20. Document comparison view shows side-by-side diff
+21. Research bounties are browsable and claimable
+22. Daily challenge appears on home page and redaction dashboard
+23. Notification bell shows unread count and dropdown
+24. Guided investigation mission walks through steps with progress tracking
+25. Photo identification interface allows tagging people in images
 
 ## Notes
 
@@ -275,3 +485,8 @@ lib/hooks/
 - Auth route group `(auth)` should have a layout that checks auth and redirects to login
 - Contribution forms should use progressive disclosure (show more fields as user fills in earlier ones)
 - Image upload uses FormData for file upload to the API route
+- Annotations use optimistic updates (show immediately, sync in background)
+- Investigation threads are the primary collaborative research tool — prioritize UX
+- Daily challenge selection algorithm: highest potential_cascade_count + good surrounding context + not attempted by too many users
+- Notification center uses Supabase Realtime for push notifications
+- OCR correction queue prioritizes pages with low OCR confidence scores

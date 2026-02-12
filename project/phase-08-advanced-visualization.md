@@ -4,7 +4,7 @@
 
 ## Summary
 
-Build the D3 force-directed entity relationship graph, interactive timeline view, cascade replay animation, and researcher placeholder pages. These are the visually impressive features that demonstrate the platform's analytical capabilities.
+Build the D3 force-directed entity relationship graph (with connection path finder, temporal animation, community detection), interactive timeline view, cascade replay animation, geographic map view, evidence pinboard, document comparison visualization, and researcher placeholder pages. These are the visually impressive features that demonstrate the platform's analytical capabilities and help researchers and prosecutors see the big picture.
 
 ## Checklist
 
@@ -45,6 +45,10 @@ Build the D3 force-directed entity relationship graph, interactive timeline view
   - Minimum connection strength slider
   - Search box (highlights matching nodes)
   - Layout algorithm toggle (force-directed, radial, hierarchical)
+  - **"Find Path" tool** — select two entities, show shortest connection path
+  - **Time slider** — scrub through dates to show how network evolved
+  - **Cluster detection** — highlight automatically detected communities/groups
+  - **Criminal indicator overlay** — color nodes by criminal indicator score (green→yellow→red)
 
 - [ ] `components/graph/GraphTooltip.tsx` — Hover card for nodes/edges
   - Node hover: entity name, type, mention count, top connections
@@ -120,6 +124,86 @@ Build the D3 force-directed entity relationship graph, interactive timeline view
   - Replace static placeholder with animated CascadeReplay component
   - Add "View full replay" link to `/cascade/[id]`
 
+### Geographic Map View
+
+- [ ] `app/(public)/map/page.tsx` — Geographic evidence map
+  - World map with location pins for all mentioned locations
+  - Pin size proportional to mention frequency
+  - Pin color by entity type (properties, meeting locations, travel destinations)
+  - Click pin → sidebar with all documents mentioning that location
+  - Date range filter — scrub through time to see location activity
+  - Known properties highlighted (NYC, Palm Beach, NM ranch, Little St. James, Paris)
+  - Flight route overlay (connect origin/destination locations from flight logs)
+  - Heat map mode (density of mentions)
+  - Empty state with placeholder map
+
+- [ ] `components/map/EvidenceMap.tsx` — Map component (Mapbox GL JS or Leaflet)
+  - Interactive map with clustering for dense areas
+  - Popup on pin hover with location name, mention count, top entities
+  - Route lines for flight data
+  - Dynamic import for bundle size
+
+- [ ] `components/map/MapControls.tsx` — Map filter panel
+  - Location type filter (property, city, country, venue)
+  - Date range slider
+  - Entity filter (show locations connected to specific people)
+  - Toggle: flight routes, properties, all mentions
+
+- [ ] `components/map/MapSidebar.tsx` — Location detail sidebar
+  - Location name, coordinates
+  - All documents mentioning this location
+  - Entities associated with this location
+  - Timeline of activity at this location
+
+### Connection Path Finder
+
+- [ ] `components/graph/PathFinder.tsx` — Find shortest path between two entities
+  - Two entity search inputs
+  - "Find Connection" button
+  - Visual path display showing each intermediate entity and relationship
+  - Evidence documents supporting each link in the chain
+  - "X degrees of separation" summary
+  - Exportable as evidence chain for prosecutors
+
+### Temporal Network Animation
+
+- [ ] `components/graph/TemporalGraph.tsx` — Time-evolving network
+  - Timeline scrubber below graph canvas
+  - Play/pause button to animate network evolution over time
+  - Nodes appear when entity first mentioned, fade when last mentioned
+  - Edges appear/disappear based on relationship date ranges
+  - Speed control (1x, 2x, 5x)
+  - Key event markers on timeline (arrests, raids, legal proceedings)
+
+### Evidence Pinboard
+
+- [ ] `app/(auth)/pinboard/page.tsx` — Drag-and-drop evidence board
+  - Virtual corkboard canvas
+  - Pin documents, images, entities, timeline events, text notes
+  - Draw labeled connections between pins (arrows with relationship labels)
+  - Red string visual metaphor (connecting pins with lines)
+  - Zoom and pan on large boards
+  - Share board via URL (public/private toggle)
+  - Export as image or PDF
+  - Multiple boards per user
+
+- [ ] `components/pinboard/PinboardCanvas.tsx` — Main canvas component
+  - Drag-and-drop pins
+  - Connection drawing tool
+  - Zoom/pan controls
+  - Grid snap toggle
+
+- [ ] `components/pinboard/PinItem.tsx` — Individual pin on the board
+  - Compact card showing document/entity/image preview
+  - Drag handle
+  - Edit/remove buttons
+  - Connection anchor points
+
+- [ ] `components/pinboard/AddPinDialog.tsx` — Search and pin items
+  - Search across documents, entities, images
+  - Preview before pinning
+  - Add text note pins
+
 ### Researcher Pages (Placeholders)
 
 - [ ] `app/(researcher)/export/page.tsx` — Bulk data export
@@ -164,7 +248,12 @@ app/(public)/
 │   └── page.tsx
 ├── timeline/
 │   └── page.tsx
-└── cascade/[id]/
+├── map/
+│   └── page.tsx
+├── cascade/[id]/
+│   └── page.tsx
+app/(auth)/
+└── pinboard/
     └── page.tsx
 app/(researcher)/
 ├── export/
@@ -181,11 +270,21 @@ app/api/gamification/
 components/graph/
 ├── RelationshipGraph.tsx
 ├── GraphControls.tsx
-└── GraphTooltip.tsx
+├── GraphTooltip.tsx
+├── PathFinder.tsx
+└── TemporalGraph.tsx
 components/timeline/
 ├── TimelineView.tsx
 ├── TimelineEvent.tsx
 └── TimelineFilters.tsx
+components/map/
+├── EvidenceMap.tsx
+├── MapControls.tsx
+└── MapSidebar.tsx
+components/pinboard/
+├── PinboardCanvas.tsx
+├── PinItem.tsx
+└── AddPinDialog.tsx
 components/gamification/
 └── CascadeReplay.tsx
 ```
@@ -205,20 +304,30 @@ components/entity/EntityConnections.tsx       — Use mini RelationshipGraph
 4. Graph zoom, pan, and node drag work smoothly
 5. Graph controls: entity type filters toggle nodes, search highlights matching nodes
 6. Click node opens entity sidebar, click edge shows evidence
-7. Timeline renders vertical layout with alternating event cards
-8. Timeline filters work: entity, date range, event type
-9. Timeline is responsive (single column on mobile)
-10. Cascade replay animates tree growth with Framer Motion
-11. Cascade page has correct OpenGraph meta tags for sharing
-12. Researcher pages show "coming soon" placeholders
-13. Gamification API stubs return correct empty response shapes
-14. Entity connections component shows mini graph for an entity
-15. D3 and Framer Motion are dynamically imported (not in main bundle)
+7. **Path finder:** select two entities → shows shortest connection path with evidence
+8. **Time slider:** scrubbing shows network evolution over date range
+9. **Criminal indicator overlay:** nodes colored by risk level
+10. Timeline renders vertical layout with alternating event cards
+11. Timeline filters work: entity, date range, event type
+12. Timeline is responsive (single column on mobile)
+13. **Geographic map** renders with location pins, flight routes, and date filtering
+14. **Map click** → sidebar with documents mentioning that location
+15. Cascade replay animates tree growth with Framer Motion
+16. Cascade page has correct OpenGraph meta tags for sharing
+17. **Evidence pinboard** allows drag-and-drop pins with connection drawing
+18. Pinboard can be shared via public URL
+19. Researcher pages show "coming soon" placeholders
+20. Gamification API stubs return correct empty response shapes
+21. Entity connections component shows mini graph for an entity
+22. D3, Mapbox/Leaflet, and Framer Motion are dynamically imported (not in main bundle)
 
 ## Performance Notes
 
 - D3 bundle is large (~250KB) — must be dynamically imported with `React.lazy()`
+- Mapbox GL JS or Leaflet: also dynamically imported (~200KB)
 - Graph rendering: use Canvas for >500 nodes, SVG for <500
 - Timeline: use virtualization or IntersectionObserver for 1000+ events
 - Cascade animation: limit to 200 nodes for smooth animation, summarize deeper cascades
 - Framer Motion: import only needed components (`motion`, `AnimatePresence`)
+- Pinboard canvas: use HTML5 Canvas or an SVG-based library for performance
+- Temporal graph animation: pre-compute snapshots, animate between them

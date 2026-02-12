@@ -4,7 +4,7 @@
 
 ## Summary
 
-Build the standalone Node.js worker process with Express API (for chat) and the 10-stage document processing pipeline. Includes chat orchestrator with agentic tool-calling loop, cascade engine, and all operational scripts.
+Build the standalone Node.js worker process with Express API (for chat) and the 12-stage document processing pipeline. Includes chat orchestrator with agentic tool-calling loop, cascade engine, AI document summary generation, audio file processing, structured data extraction (flight logs, financials), entity merge detection, pattern detection, and all operational scripts.
 
 ## Checklist
 
@@ -120,6 +120,64 @@ Build the standalone Node.js worker process with Express API (for chat) and the 
   - Extracts dated events from chunks
   - Creates `timeline_events` records with entity links
 
+### AI Document Summaries
+
+- [ ] `worker/src/services/document-summarizer.ts` — Stage 10.5: Executive summaries
+  - Uses chat provider (Gemini Flash) to generate 3-5 sentence summary per document
+  - Summary covers: what the document is, key people mentioned, time period, significance
+  - Identifies potential criminal activity indicators (evidence of trafficking, obstruction, conspiracy, etc.)
+  - Updates `documents.metadata` with summary JSON
+  - Runs after entity extraction for maximum context
+
+### Audio File Processing
+
+- [ ] `worker/src/services/audio-processor.ts` — Audio ingestion pipeline
+  - Detect audio files in corpus (mp3, wav, m4a, ogg)
+  - Transcribe via TranscriptionProvider (Whisper)
+  - Create `audio_files` and `audio_chunks` records
+  - Speaker diarization (identify different speakers in depositions/hearings)
+  - Embed audio chunks (768d text embedding of transcript)
+  - Extract entities from audio transcripts
+
+### Structured Data Extraction
+
+- [ ] `worker/src/services/structured-extractor.ts` — Extract structured records from semi-structured docs
+  - Flight manifest parser: passenger names, dates, aircraft, origin/destination
+  - Financial record parser: amounts, accounts, dates, parties
+  - Phone record parser: numbers, dates, duration, parties
+  - Address book parser: names, addresses, phone numbers, relationships
+  - Creates `structured_data_extractions` records with typed JSON
+  - Uses chat provider to parse unstructured text into structured fields
+
+### Entity Merge Detection
+
+- [ ] `worker/src/services/entity-merge-detector.ts` — Find duplicate entities
+  - Compare entity name embeddings to find near-duplicates
+  - Check aliases overlap
+  - Score merge candidates by similarity
+  - Create merge suggestions for community voting (not auto-merge)
+
+### Pattern Detection
+
+- [ ] `worker/src/services/pattern-detector.ts` — Find repeated phrases and anomalies
+  - Detect repeated boilerplate language across documents
+  - Identify form letters used multiple times
+  - Flag documents with anomalous metadata (date mismatches, unusual classifications)
+  - Detect redaction patterns (systematic redactions suggesting coordinated concealment)
+  - Flag potential evidence of criminal activity patterns
+
+### Criminal Activity Indicator Scoring
+
+- [ ] `worker/src/services/criminal-indicator-scorer.ts` — Flag evidence of crimes
+  - Uses chat provider to analyze document content for indicators of:
+    - Trafficking (travel patterns, minor mentions, exploitation language)
+    - Obstruction (document destruction references, witness tampering)
+    - Conspiracy (coordination language, coded communication)
+    - Financial crimes (money laundering patterns, hidden assets)
+  - Assigns indicator scores to documents and entities
+  - Creates `criminal_indicators` entries in document metadata
+  - **Critical ethical note:** Flags patterns for human review — never makes accusations
+
 ### Embedding Cache
 
 - [ ] `worker/src/services/embedding-cache.ts` — Two-tier cache
@@ -180,6 +238,16 @@ Build the standalone Node.js worker process with Express API (for chat) and the 
 - [ ] `worker/src/chatbot/tools/search-by-date.ts` — Date-range search
 - [ ] `worker/src/chatbot/tools/find-similar.ts` — Similar document finder
 
+### Intelligence Hint Processor
+
+- [ ] `worker/src/services/hint-processor.ts` — Process submitted intelligence hints
+  - When hint submitted: create/update entity, generate embeddings
+  - Search entire corpus for mentions of hint entity/aliases
+  - Score unsolved redactions against hint (char length match, context similarity, date overlap)
+  - Auto-create proposals for high-confidence matches
+  - Update hint status and `redactions_matched` count
+  - Notify hint submitter with results
+
 ### Chat API Route
 
 - [ ] `worker/src/api/chat.ts` — Express route handler for `/chat`
@@ -187,6 +255,7 @@ Build the standalone Node.js worker process with Express API (for chat) and the 
   - Rate limiting
   - Calls chat orchestrator
   - Streams SSE response
+  - Prosecutor mode: can ask "What evidence exists against [person]?" and get a structured dossier
 
 ### Scripts
 
@@ -239,7 +308,14 @@ worker/
     │   ├── redaction-detector.ts
     │   ├── cohere-reranker.ts
     │   ├── video-transcriber.ts
-    │   └── cascade-engine.ts
+    │   ├── cascade-engine.ts
+    │   ├── document-summarizer.ts
+    │   ├── audio-processor.ts
+    │   ├── structured-extractor.ts
+    │   ├── entity-merge-detector.ts
+    │   ├── pattern-detector.ts
+    │   ├── criminal-indicator-scorer.ts
+    │   └── hint-processor.ts
     ├── chatbot/
     │   ├── chat-orchestrator.ts
     │   ├── rag-retrieval.ts

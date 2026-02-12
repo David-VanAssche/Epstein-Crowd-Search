@@ -4,7 +4,7 @@
 
 ## Summary
 
-Build the live funding tracker page, donation impact calculator, spend transparency log, and corpus stats page. Funding visibility is critical for driving donations — every page should connect users to the funding story.
+Build the live funding tracker page, donation impact calculator, spend transparency log, corpus stats page, corpus coverage heatmap, document completeness dashboard, "This Day in the Files" feature, and research activity tracking. Funding visibility is critical for driving donations — every page should connect users to the funding story and show exactly where attention is needed.
 
 ## Checklist
 
@@ -113,10 +113,58 @@ Build the live funding tracker page, donation impact calculator, spend transpare
 - [ ] `components/stats/CorpusStats.tsx` — Total counts and breakdowns
   - Grid of stat cards with icons
   - Numbers with animation on load
+  - Criminal activity indicators section (how many documents flagged, by category)
 
 - [ ] `components/stats/FundingProgress.tsx` — Funding progress for stats page
   - Compact version of FundingTracker
   - Shows $ raised → pages processed conversion
+
+### Corpus Coverage Heatmap
+
+- [ ] `components/stats/CoverageHeatmap.tsx` — Visual coverage matrix
+  - Matrix showing datasets × document types
+  - Color intensity = percentage of documents reviewed by community
+  - Highlights blind spots (under-researched areas in red/orange)
+  - Click cell → filtered search for that dataset+type combination
+  - "Most under-researched areas" callout
+
+- [ ] `components/stats/ResearchActivityMap.tsx` — Where researchers are focusing
+  - Time-based heatmap showing research activity over past 7/30 days
+  - Which entities are getting the most attention
+  - Which datasets have the most annotations
+  - "Under-explored" sections highlighted
+
+### Document Completeness Dashboard
+
+- [ ] `components/stats/CompletenessTracker.tsx` — Document review progress
+  - How many documents have been:
+    - OCR verified by community
+    - Entities confirmed by community
+    - Dates validated
+    - Redactions attempted
+    - Cross-references checked
+  - Overall "community verification percentage"
+  - "Claim a document to review" CTA
+
+### Smart Priority Queue
+
+- [ ] `components/stats/NeedsEyesFeed.tsx` — "Needs Eyes" document queue
+  - Documents ranked by: entity density × redaction count × low review count
+  - "This document has 12 redactions and 8 entity mentions but hasn't been reviewed yet"
+  - "Claim for review" button
+  - Filter by dataset, doc type, difficulty estimate
+
+### Prosecutor Dashboard
+
+- [ ] `app/(public)/prosecutors/page.tsx` — Prosecutor-ready overview
+  - "For Law Enforcement & Legal Professionals" header
+  - Per-entity evidence summaries with citation counts
+  - Criminal activity indicator breakdowns
+  - Most-connected entities (by relationship strength)
+  - Most-flagged documents (highest criminal indicator scores)
+  - "Export Full Evidence Package" button
+  - How to verify findings, chain of custody notes
+  - Contact information for legal inquiries
 
 ## Files to Create
 
@@ -124,7 +172,9 @@ Build the live funding tracker page, donation impact calculator, spend transpare
 app/(public)/
 ├── funding/
 │   └── page.tsx
-└── stats/
+├── stats/
+│   └── page.tsx
+└── prosecutors/
     └── page.tsx
 components/funding/
 ├── FundingTracker.tsx
@@ -136,7 +186,11 @@ components/funding/
 components/stats/
 ├── ProcessingProgress.tsx
 ├── CorpusStats.tsx
-└── FundingProgress.tsx
+├── FundingProgress.tsx
+├── CoverageHeatmap.tsx
+├── ResearchActivityMap.tsx
+├── CompletenessTracker.tsx
+└── NeedsEyesFeed.tsx
 app/api/funding/
 ├── status/
 │   └── route.ts
@@ -170,6 +224,11 @@ components/document/DocumentViewer.tsx    — Add funding footer
 11. Funding CTA appears on home page, search empty state, document footer
 12. Dismissible banner works (dismissed state persists in localStorage)
 13. All components are mobile responsive
+14. Coverage heatmap shows dataset × doc type matrix with blind spot highlighting
+15. Research activity map shows where community attention is focused
+16. Document completeness tracker shows verification progress
+17. "Needs Eyes" feed surfaces high-priority unreviewed documents
+18. Prosecutor dashboard shows per-entity evidence summaries with export option
 
 ## Notes
 

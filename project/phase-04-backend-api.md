@@ -130,12 +130,81 @@ Build the AI provider abstraction layer, search library, all API routes, auth mi
 - [ ] `app/api/stats/route.ts` — Corpus processing stats
   - GET: Return corpus_stats materialized view data
 
+### API Routes — Random & Discovery
+
+- [ ] `app/api/random-document/route.ts` — Random document for discovery
+  - GET: Return a random document ID (weighted toward unreviewed documents)
+  - Optional filter: dataset, doc_type
+
+- [ ] `app/api/discoveries/route.ts` — Public discovery feed
+  - GET: Recent confirmed solves, new entity connections, pattern discoveries
+  - Paginated, filterable by type
+
+- [ ] `app/api/discoveries/today-in-history/route.ts` — "This Day in the Files"
+  - GET: Documents with dates matching today's month+day in any year
+  - Returns document summaries + date context
+
+- [ ] `app/api/document/[id]/similar/route.ts` — "More Like This"
+  - GET: Semantically similar documents via embedding similarity
+  - Returns top 10 similar documents
+
+- [ ] `app/api/entity/[id]/dossier/route.ts` — Evidence dossier for prosecutors
+  - GET: Auto-generated prosecutor-ready summary
+  - All documents mentioning entity, relationship evidence, timeline of involvement
+  - Formatted for legal review with full citations
+
+### API Routes — Annotations & Collaboration
+
+- [ ] `app/api/annotations/route.ts` — Document annotations
+  - GET: Annotations for a document/chunk (with pagination)
+  - POST: Create annotation (auth required)
+
+- [ ] `app/api/annotations/[id]/vote/route.ts` — Vote on annotation
+  - POST: Upvote/downvote annotation (auth required)
+
+- [ ] `app/api/investigation-threads/route.ts` — Investigation threads
+  - GET: List public threads (paginated, filterable)
+  - POST: Create thread (auth required)
+
+- [ ] `app/api/investigation-threads/[id]/route.ts` — Thread details
+  - GET: Thread with items
+  - PUT: Update thread (owner only)
+  - POST: Add item to thread (owner + followers)
+
+- [ ] `app/api/ocr-corrections/route.ts` — OCR corrections
+  - GET: Corrections for a document
+  - POST: Submit correction (auth required)
+
+- [ ] `app/api/notifications/route.ts` — Notification center
+  - GET: User's notifications (paginated, unread count)
+  - PUT: Mark as read
+
+- [ ] `app/api/bounties/route.ts` — Research bounties
+  - GET: Open bounties (filterable, sortable by XP reward)
+  - POST: Create bounty (auth required, level 3+)
+
+- [ ] `app/api/facts/route.ts` — Fact registry
+  - GET: Verified facts (searchable)
+  - POST: Propose fact with evidence (auth required)
+
+### API Routes — Content-Type Browse
+
+- [ ] `app/api/photos/route.ts` — Photo gallery data
+  - GET: Paginated images with filters (dataset, date, has_redaction, has_people)
+
+- [ ] `app/api/audio/route.ts` — Audio file listing
+  - GET: Audio files with metadata, grouped by type/dataset
+
+- [ ] `app/api/flights/route.ts` — Structured flight log data
+  - GET: Flight records with passenger, date, aircraft, origin/destination filters
+
 ### API Routes — Auth
 
 - [ ] `app/api/auth/callback/route.ts` — Supabase auth callback
   - GET: Exchange code for session
   - Redirect to origin or home page
   - Create user_profile record on first login
+  - Run onboarding quiz results processing
 
 ### Middleware & Auth
 
@@ -164,6 +233,16 @@ Build the AI provider abstraction layer, search library, all API routes, auth mi
 - [ ] `lib/utils/storage.ts` — Supabase Storage signed URL generation
   - Generate signed URLs for document/image downloads
   - URL expiry configuration
+
+- [ ] `lib/utils/dossier.ts` — Evidence dossier generation
+  - Compile all evidence for an entity into prosecutor-ready format
+  - Sections: Involvement Summary, Key Documents (with citations), Relationship Map, Timeline, Cross-References, Potential Criminal Activity Indicators
+  - Output as structured JSON (rendered by frontend) or PDF
+
+- [ ] `lib/utils/export.ts` — Citation export utilities
+  - Export document references as BibTeX, RIS, Zotero-compatible formats
+  - Export entity dossier as PDF
+  - Export investigation thread as report
 
 ### Chat Library (Client-side)
 
@@ -205,7 +284,9 @@ lib/auth/
 lib/utils/
 ├── citations.ts
 ├── dates.ts
-└── storage.ts
+├── storage.ts
+├── dossier.ts
+└── export.ts
 app/api/
 ├── search/
 │   ├── route.ts
@@ -232,6 +313,38 @@ app/api/
 │   └── solvable/
 │       └── route.ts
 ├── stats/
+│   └── route.ts
+├── random-document/
+│   └── route.ts
+├── discoveries/
+│   ├── route.ts
+│   └── today-in-history/
+│       └── route.ts
+├── document/[id]/similar/
+│   └── route.ts
+├── entity/[id]/dossier/
+│   └── route.ts
+├── annotations/
+│   ├── route.ts
+│   └── [id]/vote/
+│       └── route.ts
+├── investigation-threads/
+│   ├── route.ts
+│   └── [id]/
+│       └── route.ts
+├── ocr-corrections/
+│   └── route.ts
+├── notifications/
+│   └── route.ts
+├── bounties/
+│   └── route.ts
+├── facts/
+│   └── route.ts
+├── photos/
+│   └── route.ts
+├── audio/
+│   └── route.ts
+├── flights/
 │   └── route.ts
 └── auth/
     └── callback/

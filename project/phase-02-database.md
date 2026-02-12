@@ -4,7 +4,7 @@
 
 ## Summary
 
-Create all 15 Supabase migrations with the exact SQL schema from the scaffold, set up Supabase client libraries, and define TypeScript types for all database entities. This phase creates the complete data layer that all subsequent phases build on.
+Create all 18 Supabase migrations with the exact SQL schema from the scaffold plus crowdsourced research tables, set up Supabase client libraries, and define TypeScript types for all database entities. This phase creates the complete data layer that all subsequent phases build on.
 
 ## Checklist
 
@@ -130,6 +130,85 @@ Create all 15 Supabase migrations with the exact SQL schema from the scaffold, s
   - `xp_transactions` table (every XP change logged)
   - `weekly_leaderboard` materialized view
 
+### Migration 00016: Collaborative Research Tables
+
+- [ ] `supabase/migrations/00016_collaborative_research_tables.sql`
+  - `annotations` table — per-paragraph margin notes on documents
+    - user_id, document_id, chunk_id, page_number
+    - content TEXT, annotation_type (question, observation, correction, connection)
+    - parent_id (for reply threads), upvotes, downvotes
+    - created_at, updated_at
+  - `investigation_threads` table — collaborative case files
+    - user_id (creator), title, description, status (active, completed, archived)
+    - is_public BOOLEAN, follower_count, fork_source_id (self-ref for forks)
+    - conclusion_summary TEXT, tags TEXT[]
+    - created_at, updated_at
+  - `investigation_thread_items` table — items in a thread
+    - thread_id, user_id, item_type (document, entity, timeline_event, annotation, note, image)
+    - target_id UUID, position INTEGER (ordering)
+    - note TEXT, created_at
+  - `investigation_thread_followers` table — users following threads
+    - thread_id, user_id, created_at, UNIQUE(thread_id, user_id)
+  - `ocr_corrections` table — crowdsourced OCR fixes
+    - user_id, chunk_id, document_id, page_number
+    - original_text TEXT, corrected_text TEXT
+    - status (pending, approved, rejected), reviewed_by UUID
+    - created_at
+  - `document_reviews` table — completeness tracking
+    - document_id, user_id, review_type (ocr_verified, entities_confirmed, dates_validated, redactions_attempted, cross_references_checked)
+    - notes TEXT, created_at
+    - UNIQUE(document_id, user_id, review_type)
+  - `research_bounties` table — targeted investigation requests
+    - created_by UUID, title, description, entity_ids UUID[], target_type (entity, redaction, question, pattern)
+    - xp_reward INTEGER, status (open, claimed, completed, expired)
+    - claimed_by UUID, completed_at, expires_at
+    - created_at
+
+### Migration 00017: Notifications & Alerts
+
+- [ ] `supabase/migrations/00017_notifications_alerts.sql`
+  - `notifications` table — in-app notification center
+    - user_id, type (proposal_update, annotation_reply, search_alert, achievement, bounty, system)
+    - title TEXT, message TEXT, link TEXT
+    - is_read BOOLEAN DEFAULT false, created_at
+  - `saved_search_alerts` table — watch queries for new results
+    - user_id, saved_search_id REFERENCES saved_searches(id)
+    - is_active BOOLEAN DEFAULT true, frequency (immediate, daily, weekly)
+    - last_notified_at, new_results_count INTEGER DEFAULT 0
+    - created_at
+  - `fact_registry` table — verified facts with evidence
+    - fact_text TEXT NOT NULL, confidence FLOAT
+    - entity_ids UUID[], supporting_chunk_ids UUID[], supporting_document_ids UUID[]
+    - verified_by UUID[], verification_count INTEGER DEFAULT 0
+    - counter_evidence_count INTEGER DEFAULT 0
+    - status (proposed, verified, disputed, retracted)
+    - created_at, updated_at
+
+### Migration 00018: Content-Type Browse & Audio
+
+- [ ] `supabase/migrations/00018_content_type_audio.sql`
+  - `audio_files` table — standalone audio recordings (court audio, depositions)
+    - document_id (optional ref), dataset_id, filename, storage_path
+    - duration_seconds, transcript TEXT, transcript_language DEFAULT 'en'
+    - file_type (mp3, wav, m4a, ogg), file_size_bytes
+    - processing_status, metadata JSONB
+    - created_at
+  - `audio_chunks` table — transcribed audio segments
+    - audio_id REFERENCES audio_files(id)
+    - chunk_index, content TEXT, timestamp_start FLOAT, timestamp_end FLOAT
+    - content_embedding VECTOR(768), content_tsv TSVECTOR
+    - speaker_label TEXT (if diarized)
+    - created_at, UNIQUE(audio_id, chunk_index)
+  - `pinboard_boards` table — drag-and-drop evidence boards
+    - user_id, title, description, is_public BOOLEAN
+    - board_data JSONB (positions, connections, labels)
+    - created_at, updated_at
+  - `structured_data_extractions` table — extracted structured records (flight logs, financials)
+    - document_id, chunk_id, extraction_type (flight_manifest, financial_record, phone_record, address_book_entry)
+    - extracted_data JSONB (schema varies by type)
+    - confidence FLOAT, verified_by UUID
+    - created_at
+
 ### Supabase Client Setup
 
 - [ ] `lib/supabase/client.ts` — Browser client (uses NEXT_PUBLIC env vars)
@@ -143,6 +222,7 @@ Create all 15 Supabase migrations with the exact SQL schema from the scaffold, s
 - [ ] `types/search.ts` — SearchRequest, SearchResponse, SearchResult, SearchFilters, MultimodalResult
 - [ ] `types/chat.ts` — ChatMessage, ChatConversation, ChatStreamEvent, ToolCall
 - [ ] `types/redaction.ts` — Redaction, RedactionProposal, ProposalVote, RedactionStatus enum
+- [ ] `types/collaboration.ts` — Annotation, InvestigationThread, ThreadItem, OCRCorrection, DocumentReview, ResearchBounty, Notification, Fact
 
 ### Scripts
 
@@ -168,7 +248,10 @@ supabase/
     ├── 00012_stats_views.sql
     ├── 00013_funding_tables.sql
     ├── 00014_contribution_tables.sql
-    └── 00015_gamification_tables.sql
+    ├── 00015_gamification_tables.sql
+    ├── 00016_collaborative_research_tables.sql
+    ├── 00017_notifications_alerts.sql
+    └── 00018_content_type_audio.sql
 lib/supabase/
 ├── client.ts
 ├── server.ts
@@ -178,14 +261,15 @@ types/
 ├── entities.ts
 ├── search.ts
 ├── chat.ts
-└── redaction.ts
+├── redaction.ts
+└── collaboration.ts
 scripts/
 └── setup-types.sh
 ```
 
 ## Acceptance Criteria
 
-1. All 15 migration files contain valid SQL
+1. All 18 migration files contain valid SQL
 2. SQL can be reviewed for correctness (table references, foreign keys, constraints)
 3. All vector dimensions correct: 768d for text, 1408d for visual
 4. RRF search functions match the scaffold spec exactly
