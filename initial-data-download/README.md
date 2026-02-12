@@ -36,28 +36,52 @@ Get all docs/images/videos into Supabase Storage, organized by dataset, with as 
 - Python 3.11+
 - Git
 
-## Execution Ordering (Build Plan Integration)
+## Execution Ordering (Interleaved with Build)
 
-Data ingestion runs as a **parallel track** alongside the main build phases. It does NOT block the build — the platform works at zero data.
+Data ingestion is **woven into the build sequence**, not a parallel track. Each data source is imported at the specific build step where it provides maximum testing value.
 
-**Recommended sequence:**
-1. Complete Build Phase 2 (Database) — this creates the shared migrations including `data_sources`, provenance columns, and `flights` table
-2. Run Ingest-0 (Setup) + Ingest-1 (Community Data) — immediately after Phase 2
-3. Continue Build Phases 3-6 in parallel with ingestion
-4. Documents from community ingestion use `processing_status = 'community'` — tells the worker pipeline to skip stages already satisfied by community data
+### When Each Ingestion Phase Runs
 
-**Dependency on Build Phase 2:**
+| Ingestion Phase | Build Step | What Happens |
+|---|---|---|
+| **Ingest-0 (Setup)** | Step 1-2 | Supabase Pro, buckets, migrations, seed `data_sources` + `datasets` tables |
+| **Ingest-1.1-1.3 (OCR text)** | Step 3 | Import s0fskr1p, tensonaut, markramm → enables keyword search testing |
+| **Ingest-1.4-1.5, 1.10 (Chunks)** | Step 4 | Import svetfm embeddings, benbaessler chunks → enables semantic search testing |
+| **Ingest-1.6-1.9 (Entities)** | Step 5 | Import LMSBAND, epstein-docs, ErikVeland, maxandrews → enables entity graph testing |
+| **Ingest-1.11-1.14 (Structured)** | Step 6 | Import black book, emails, Kaggle, flight logs → enables flight/email/timeline testing |
+| **Ingest-1.15 (Tsardoz)** | Step 0 | **URGENT** — Archive before Feb 15, 2026 shutdown. Independent of all other steps. |
+| **Ingest-2 (DOJ test)** | Step 8 | Stream Datasets 5+6 ZIPs → validates PDF-to-community-data merge logic |
+| **Ingest-3 (DOJ full)** | Step 11 | Stream all remaining DOJ ZIPs (~13GB) |
+| **Ingest-4 (Scrape+Torrents)** | Step 14 | Datasets 9-11 + House Oversight (~200GB) → production scale test |
+| **Ingest-5 (Verification)** | Step 15 | Cross-reference master index, generate coverage report |
+
+### Why Interleaved (Not Parallel)
+
+The original plan ran data ingestion as a parallel track: "the platform works at zero data." This was safe but missed critical bugs:
+
+- **Search quality** — Building search against empty tables means you don't discover that community embeddings produce lower-quality results until weeks later
+- **Citation integrity** — The chunk-to-document UUID mapping only gets tested when real chunks reference real documents
+- **Worker skip logic** — The pipeline can only prove it won't destroy community data if community data is already present
+- **Entity dedup** — 86K entities from 4 sources with name variations can only be tested with real data
+
+The interleaved approach catches these bugs at import time, not deployment time.
+
+### Dependencies on Build Steps
+
+- Steps 1-2 (Foundation + Database) must complete before ANY data import
 - The `data_sources` table must exist before ingestion scripts can track source status
-- Provenance columns (`ocr_source`, `embedding_model`, `source`) on `documents`, `chunks`, and `entities` tables must exist before inserting community data
-- The `flights` table must exist for structured flight log data
+- Provenance columns (`ocr_source`, `embedding_model`, `source`) must exist before inserting community data
+- The `flights` table must exist before importing structured flight log data
+- Steps 3-6 (all community data) must complete before Step 7 (UI + API) to enable real-data testing
 
-**Integration points with worker pipeline (Build Phase 6):**
-- Worker OCR stage skips documents where `ocr_source` is set (preserves community OCR, especially s0fskr1p's under-redaction text)
-- Worker chunking stage skips documents with existing embedded chunks
-- Worker entity extraction skips documents with existing entity mentions
+### Integration Points with Worker Pipeline (Build Step 10)
+
+- Worker OCR stage skips documents where `ocr_text` exists (preserves community OCR, especially s0fskr1p's under-redaction text)
+- Worker chunking stage skips documents with existing embedded chunks (advisory lock prevents TOCTOU race condition)
+- Worker entity extraction skips documents with existing entity mentions (unique index prevents duplicates)
 - Worker embedding stage records `embedding_model` and can upgrade community embeddings to target model
 
-See `project/MASTER_PLAN.md` → "Data Ingestion Integration" section for the full parallel track diagram.
+See `project/MASTER_PLAN.md` → "Build Sequence" section for the full interleaved plan.
 
 ## Task Tracking
 

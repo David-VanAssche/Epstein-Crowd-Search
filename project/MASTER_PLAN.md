@@ -37,57 +37,73 @@ The platform is designed to maximize community participation in consuming eviden
 - **Dark theme only** — no light mode for v1
 - **Every search result must cite source document + page number**
 
-## Phase Overview
+## Build Sequence — Interleaved Build + Data + Test
 
-| Phase | Name | Sessions | Description |
+The build is a single interleaved sequence where each step includes building features, importing specific data, and testing against that real data. No "build everything first, add data later" — bugs are caught immediately.
+
+### Summary Table
+
+| Step | Build | Data Loaded | Primary Test |
+|------|-------|-------------|--------------|
+| 0 | — | Archive Tsardoz (Feb 15 deadline) | Clone is complete and intact |
+| 1 | Phase 1 (Foundation) + Supabase Pro setup | Empty buckets created | `pnpm build` passes, Supabase connects |
+| 2 | Phase 2 (Database) + seed reference data | 24 `data_sources` rows, 13 `datasets` rows | Migrations applied, RLS correct, types compile |
+| 3 | Python ingest scripts | OCR text (s0fskr1p, tensonaut, markramm): ~28K docs, ~5GB | Text in storage, document rows deduplicated |
+| 4 | Parquet/ChromaDB ingest scripts | Chunks + embeddings (svetfm x2, benbaessler): 305K+ chunks | Vector search works, tsvector populated, no orphans |
+| 5 | SQLite/JSON ingest + dedup engine | Entities (LMSBAND, epstein-docs, ErikVeland, maxandrews): 86K+ entities | Single entity per person, mentions link to documents |
+| 6 | CSV/text parsing scripts | Structured data (black book, emails, Kaggle, flight logs) | Flights queryable, email entities linked |
+| 7 | Phase 3 (Core UI) + Phase 4 (Backend API) | — (refresh materialized views) | Search returns real results with working citations |
+| 8 | ZIP streaming module | DOJ Datasets 5+6 (~112MB PDFs) | PDFs merge with existing OCR rows, not duplicate |
+| 9 | Phase 5 (Interactive Features) | — | Chat cites real docs, annotations persist |
+| 10 | Phase 6 (Worker Pipeline) | — (process Step 8 PDFs) | Skip logic preserves community data |
+| 11 | — | DOJ Datasets 1-4, 7, 8, 12 (~13GB PDFs) | All ZIPs uploaded, document counts match |
+| 12 | Phase 7 (Funding/Stats) | — | Coverage heatmap accurate, stats reflect real data |
+| 13 | Phase 8 (Visualization) | — | Graph renders 86K entities, map has real markers |
+| 14 | Scraper + torrent handler | Datasets 9-11 + House Oversight (~200GB) | Pipeline runs at scale, cost tracking works |
+| 15 | Verification scripts | Master index cross-reference | No missing docs, coverage report generated |
+| 16 | Phase 9 (Polish/Deploy) | — | Lighthouse 90+, rate limits work, production live |
+| 17 | Phase 10 (Gamification) | — | XP awards, leaderboard updates, achievements unlock |
+| 18 | — | — (refresh all views) | Full end-to-end acceptance across all user journeys |
+
+### Dependency Chain
+
+```
+Step 0 (archive Tsardoz) — independent, do immediately
+Step 1 (Foundation + Supabase) → Step 2 (Database + seeds)
+  → Step 3 (OCR text import) → Step 4 (chunks + embeddings) → Step 5 (entities) → Step 6 (structured data)
+    → Step 7 (Core UI + API — tested against real data)
+      → Step 8 (DOJ ZIP test) → Step 9 (Interactive Features) → Step 10 (Worker Pipeline)
+        → Step 11 (Full DOJ upload) → Step 12 (Funding/Stats) → Step 13 (Visualization)
+          → Step 14 (Large-scale ingestion) → Step 15 (Verification) → Step 16 (Deploy) → Step 17 (Gamification) → Step 18 (Final acceptance)
+
+Parallel: Steps 3-4 can run concurrently with Steps 5-6 if two engineers available
+```
+
+### Key Design Principles
+
+1. **Build a feature, import its data, test immediately** — no empty-state-only development
+2. **Data import IS the test** — vector dimension mismatches, dedup failures, foreign key violations surface on import, not months later
+3. **Worker pipeline tests against community data** — skip logic can only be validated when documents already have OCR/chunks/entities
+4. **Smallest data first** — markramm (2,895 files) before s0fskr1p (5GB), svetfm/nov11 (69K) before svetfm/fbi (236K)
+5. **Search is the E2E MVP** — Step 7 is the first time a user can search, see results, and click into a real document
+
+### Data Import → Feature Testing Map
+
+| Data Source | Step | Features It Unlocks | Test |
 |---|---|---|---|
-| 1 | Foundation | 1 | Next.js scaffold, deps, design system, shared components, CI/CD |
-| 2 | Database | 1-2 | 18 Supabase migrations, clients, TypeScript types |
-| 3 | Core UI Pages | 2 | Home, Search, Document Viewer, Entity, Datasets, About, Login, content-type browse views |
-| 4 | Backend API | 2 | AI abstractions, search lib, all API routes, auth, annotations, notifications |
-| 5 | Interactive Features | 2-3 | Chat, redaction dashboard, contributions, annotations, investigation threads, daily challenges |
-| 6 | Worker Pipeline | 2 | Standalone worker, 10-stage pipeline, chat orchestrator, audio processing, AI summaries |
-| 7 | Funding & Stats | 1 | Funding page, impact calculator, spend log, stats, corpus coverage heatmap |
-| 8 | Advanced Visualization | 2 | D3 entity graph, timeline, cascade replay, geographic map, evidence pinboard |
-| 9 | Polish & Deploy | 1-2 | Responsive audit, performance, SEO, tests, deploy config, content warnings |
-| 10 | Gamification (v2) | 2 | XP, levels, achievements, leaderboard, cascade replay UX |
+| markramm (2,895 .txt) | 3 | Keyword search, Document viewer, OCR skip | Search "subpoena" → results with highlights |
+| svetfm/nov11 (69K chunks) | 4 | Semantic search, Chat (RAG), Chunk skip | Vector query "travel arrangements" → semantic matches |
+| epsteinsblackbook (1,971 CSV) | 6 | Entity profiles, Flight explorer, Map, Timeline | Filter aircraft "N908JE" → flight list |
+| LMSBAND (835MB SQLite) | 5 | Entity graph (D3), Entity skip | Epstein node → connected entities render |
+| notesbymuneeb (5,082 threads) | 6 | Email thread view, Timeline | Open thread → chronological email view |
+| s0fskr1p (5GB OCR) | 3 | Redaction dashboard, Under-redaction text | View redaction → highlighted region with hidden text |
+| DOJ ZIPs (13GB) | 8, 11 | PDF viewer, Worker pipeline at scale | PDFs merge with community OCR rows |
 
-## Dependency Graph
+### Highest-Risk Integration Points
 
-```
-Phase 1 → Phase 2 → Phase 4 → Phase 6
-                 ↘ Phase 3 → Phase 5
-                 ↘ Phase 7
-                           ↘ Phase 8
-All 1-8 → Phase 9 → Phase 10
-```
-
-**Parallel opportunities:** Phases 3+4 can run concurrently after Phase 2. Phase 7 can start alongside Phase 5.
-
-## Data Ingestion Integration
-
-Community data ingestion (see `initial-data-download/`) runs as a **parallel track** alongside the build phases — not as a new numbered phase. The platform works at zero data; ingestion enriches it progressively.
-
-### Parallel Track Diagram
-
-```
-BUILD:  Phase 1 → Phase 2 → Phase 3+4 → Phase 5+6+7+8 → Phase 9 → Phase 10
-                      ↓          ↓              ↓
-DATA:   Ingest-0 → Ingest-1 → Ingest-2+3 → Ingest-4+5
-```
-
-- **Ingest-0** (setup) runs same day as Phase 2 completion — shares the same migrations
-- **Ingest-1** (community data) runs in parallel with Phases 3-4
-- **No build phase waits for ingestion** — the platform works at zero data
-
-### Build Phase ↔ Ingestion Phase Mapping
-
-| Build Phase | Ingestion Phase | Integration Point |
-|---|---|---|
-| Phase 2 (Database) | Ingest-0 (Setup) | Shared migrations: `data_sources`, provenance columns, `flights` table |
-| Phase 3 (Core UI) | Ingest-1 (Community Data) | EmptyState `community-data` variant, Sources page, updated stats |
-| Phase 4 (Backend API) | Ingest-1 (Community Data) | `/api/stats`, `/api/sources` routes, embedding model detection in search |
-| Phase 6 (Worker Pipeline) | Ingest-2+ (Validation) | OCR skip logic, chunking guards, entity idempotency, `COMMUNITY` status |
+1. **Chunk-to-document mapping (Step 4)** — Community data identifies documents by filename; the database uses UUIDs. If the mapping is wrong, every citation in the application is broken.
+2. **Worker skip logic (Step 10)** — If the pipeline overwrites community data, thousands of dollars of free processing are destroyed. Can only be tested with community data already present.
+3. **Entity deduplication (Step 5)** — 86K entities from 4 sources with name variations ("Ghislaine Maxwell" / "GHISLAINE MAXWELL" / "G. Maxwell"). The `name_normalized` + `pg_trgm` approach gets its first real test.
 
 ### Key Reconciliation Decisions
 
