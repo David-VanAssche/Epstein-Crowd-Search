@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+.mcp.json
+
+# Build output
+dist/
+
+# OS
+.DS_Store
+
+# Local tooling
+.claude/
+mcp-servers/
