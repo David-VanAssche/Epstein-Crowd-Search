@@ -64,6 +64,38 @@ All 1-8 → Phase 9 → Phase 10
 
 **Parallel opportunities:** Phases 3+4 can run concurrently after Phase 2. Phase 7 can start alongside Phase 5.
 
+## Data Ingestion Integration
+
+Community data ingestion (see `initial-data-download/`) runs as a **parallel track** alongside the build phases — not as a new numbered phase. The platform works at zero data; ingestion enriches it progressively.
+
+### Parallel Track Diagram
+
+```
+BUILD:  Phase 1 → Phase 2 → Phase 3+4 → Phase 5+6+7+8 → Phase 9 → Phase 10
+                      ↓          ↓              ↓
+DATA:   Ingest-0 → Ingest-1 → Ingest-2+3 → Ingest-4+5
+```
+
+- **Ingest-0** (setup) runs same day as Phase 2 completion — shares the same migrations
+- **Ingest-1** (community data) runs in parallel with Phases 3-4
+- **No build phase waits for ingestion** — the platform works at zero data
+
+### Build Phase ↔ Ingestion Phase Mapping
+
+| Build Phase | Ingestion Phase | Integration Point |
+|---|---|---|
+| Phase 2 (Database) | Ingest-0 (Setup) | Shared migrations: `data_sources`, provenance columns, `flights` table |
+| Phase 3 (Core UI) | Ingest-1 (Community Data) | EmptyState `community-data` variant, Sources page, updated stats |
+| Phase 4 (Backend API) | Ingest-1 (Community Data) | `/api/stats`, `/api/sources` routes, embedding model detection in search |
+| Phase 6 (Worker Pipeline) | Ingest-2+ (Validation) | OCR skip logic, chunking guards, entity idempotency, `COMMUNITY` status |
+
+### Key Reconciliation Decisions
+
+1. **Embedding model mismatch**: Community data uses `nomic-embed-text` (768d); our pipeline uses `text-embedding-004` (768d). Vectors stored in same column with `embedding_model` tag. Search filters to same-model vectors at query time. Keyword search works across all chunks regardless.
+2. **Entity deduplication**: `name_normalized` column catches case/whitespace/title differences at ingest time. `pg_trgm` batch job merges similar entities post-ingest. Pipeline embedding-based dedup handles semantic matches.
+3. **HNSW over IVFFlat**: IVFFlat on empty tables creates degenerate indexes. HNSW works at any table size. Can switch back after data loads if memory is tight.
+4. **Worker skip logic**: Pipeline stages check document state before running. Community OCR (especially s0fskr1p's under-redaction text) is never overwritten. Community chunks with embeddings are never deleted.
+
 ## File Counts by Phase
 
 | Phase | Estimated Files |

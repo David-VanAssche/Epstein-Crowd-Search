@@ -330,6 +330,7 @@ export function getOrderedStages(): PipelineStage[] {
 /** Map of processing_status values used in documents table */
 export const PROCESSING_STATUS = {
   PENDING: 'pending',
+  COMMUNITY: 'community',  // From community ingestion — eligible for processing but skip what's already done
   OCR: 'ocr',
   CLASSIFYING: 'classifying',
   CHUNKING: 'chunking',
@@ -756,8 +757,11 @@ export interface PipelineResult {
   totalDurationMs: number
 }
 
+export type StageSkipCheck = (documentId: string, supabase: SupabaseClient) => Promise<boolean>
+
 export class PipelineOrchestrator {
   private handlers = new Map<PipelineStage, StageHandler>()
+  private skipChecks = new Map<PipelineStage, StageSkipCheck>()
   private supabase: SupabaseClient
   private config: PipelineConfig
 
@@ -769,6 +773,11 @@ export class PipelineOrchestrator {
   /** Register a handler for a pipeline stage */
   registerStage(stage: PipelineStage, handler: StageHandler): void {
     this.handlers.set(stage, handler)
+  }
+
+  /** Register a skip check for a pipeline stage */
+  registerSkipCheck(stage: PipelineStage, check: StageSkipCheck): void {
+    this.skipChecks.set(stage, check)
   }
 
   /** Run the full pipeline for a document */
@@ -791,6 +800,18 @@ export class PipelineOrchestrator {
       if (!handler) {
         console.warn(`[Pipeline] No handler registered for stage: ${stage}, skipping`)
         continue
+      }
+
+      // Per-document skip check: query document state and skip if stage is already satisfied.
+      // Belt-and-suspenders with per-handler checks (6.1-6.4) as safety net.
+      const skipCheck = this.skipChecks.get(stage)
+      if (skipCheck) {
+        const shouldSkip = await skipCheck(documentId, this.supabase)
+        if (shouldSkip) {
+          console.log(`[Pipeline] Stage ${stage} skipped for document ${documentId} (already satisfied)`)
+          results.push({ stage, success: true, durationMs: 0, retries: 0 })
+          continue
+        }
       }
 
       const stageDef = STAGE_DEFINITIONS.find((d) => d.stage === stage)
@@ -1000,6 +1021,28 @@ async function main() {
   pipeline.registerStage(PipelineStage.SUMMARIZE, handleSummarize)
   pipeline.registerStage(PipelineStage.CRIMINAL_INDICATORS, handleCriminalIndicators)
 
+  // --- Skip check registrations (belt-and-suspenders with per-handler checks) ---
+  pipeline.registerSkipCheck(PipelineStage.OCR, async (docId, supabase) => {
+    const { data } = await supabase.from('documents')
+      .select('ocr_text').eq('id', docId).single()
+    return !!data?.ocr_text
+  })
+
+  pipeline.registerSkipCheck(PipelineStage.CHUNK, async (docId, supabase) => {
+    const { count } = await supabase.from('chunks')
+      .select('id', { count: 'exact', head: true })
+      .eq('document_id', docId)
+      .not('content_embedding', 'is', null)
+    return (count ?? 0) > 0
+  })
+
+  pipeline.registerSkipCheck(PipelineStage.ENTITY_EXTRACT, async (docId, supabase) => {
+    const { count } = await supabase.from('entity_mentions')
+      .select('id', { count: 'exact', head: true })
+      .eq('document_id', docId)
+    return (count ?? 0) > 0
+  })
+
   // --- Job queue ---
   const jobQueue = await createJobQueue({
     redisUrl: process.env.REDIS_URL,
@@ -1194,11 +1237,21 @@ export async function handleOCR(
   // 1. Fetch document metadata
   const { data: doc, error: docError } = await supabase
     .from('documents')
-    .select('id, filename, file_type, mime_type, storage_path')
+    .select('id, filename, file_type, mime_type, storage_path, ocr_text, ocr_source')
     .eq('id', documentId)
     .single()
 
   if (docError || !doc) throw new Error(`Document not found: ${documentId}`)
+
+  // SKIP CHECK: If community OCR exists, do not overwrite it.
+  // s0fskr1p's OCR includes text extracted from UNDER overlay redactions —
+  // irreplaceable data that pipeline OCR cannot reproduce. Overwriting it is data loss.
+  if (doc.ocr_text) {
+    console.log(
+      `[OCR] Document ${documentId}: skipping — OCR text already exists (source: ${doc.ocr_source ?? 'unknown'})`
+    )
+    return
+  }
 
   // 2. Download file from Supabase Storage
   const { data: fileData, error: dlError } = await supabase.storage
@@ -1649,6 +1702,30 @@ export function chunkDocument(
   return allChunks
 }
 
+// --- Advisory lock helper (prevents TOCTOU race conditions on concurrent workers) ---
+
+function hashDocumentId(documentId: string): number {
+  let hash = 0
+  for (const ch of documentId) {
+    hash = (hash * 31 + ch.charCodeAt(0)) | 0
+  }
+  return Math.abs(hash)
+}
+
+async function withDocumentLock<T>(
+  documentId: string,
+  supabase: SupabaseClient,
+  fn: () => Promise<T>
+): Promise<T> {
+  const lockKey = hashDocumentId(documentId)
+  await supabase.rpc('pg_advisory_xact_lock', { key: lockKey })
+  try {
+    return await fn()
+  } finally {
+    // pg_advisory_xact_lock auto-releases at transaction end
+  }
+}
+
 // --- Stage handler ---
 
 export async function handleChunk(
@@ -1666,7 +1743,28 @@ export async function handleChunk(
   if (error || !doc) throw new Error(`Document not found: ${documentId}`)
   if (!doc.ocr_text) throw new Error(`Document ${documentId} has no OCR text`)
 
-  // Delete existing chunks (idempotent)
+  // Use advisory lock to prevent TOCTOU race condition:
+  // Without this, Worker A could check embeddings (0), Worker B starts embedding,
+  // then Worker A deletes all chunks including the ones Worker B just embedded.
+  return withDocumentLock(documentId, supabase, async () => {
+
+  // Check if chunks with pre-computed embeddings exist (community data).
+  // Deleting these would destroy 300K+ community chunks with their embeddings —
+  // labeled "idempotent" but actually causes massive data loss.
+  const { count: embeddedChunkCount } = await supabase
+    .from('chunks')
+    .select('id', { count: 'exact', head: true })
+    .eq('document_id', documentId)
+    .not('content_embedding', 'is', null)
+
+  if (embeddedChunkCount && embeddedChunkCount > 0) {
+    console.log(
+      `[Chunker] Document ${documentId}: skipping — ${embeddedChunkCount} chunks with embeddings exist`
+    )
+    return
+  }
+
+  // Delete existing chunks without embeddings (safe idempotent re-run)
   await supabase.from('chunks').delete().eq('document_id', documentId)
 
   const chunks = chunkDocument(doc.ocr_text)
@@ -1698,6 +1796,8 @@ export async function handleChunk(
   }
 
   console.log(`[Chunker] Document ${documentId}: created ${chunks.length} chunks`)
+
+  }) // end withDocumentLock
 }
 ```
 
@@ -1991,13 +2091,17 @@ export async function handleEmbed(
 
   const { data: chunks, error } = await supabase
     .from('chunks')
-    .select('id, content, contextual_header, content_embedding')
+    .select('id, content, contextual_header, content_embedding, embedding_model')
     .eq('document_id', documentId)
     .order('chunk_index', { ascending: true })
 
   if (error || !chunks) throw new Error(`Failed to fetch chunks: ${error?.message}`)
 
-  const needsEmbedding = chunks.filter((c) => !c.content_embedding)
+  const TARGET_MODEL = process.env.EMBEDDING_MODEL || 'text-embedding-004'
+  // Embed chunks that either have no embedding or use a different model (enables upgrades)
+  const needsEmbedding = chunks.filter(
+    (c) => !c.content_embedding || c.embedding_model !== TARGET_MODEL
+  )
   if (needsEmbedding.length === 0) {
     console.log(`[Embed] Document ${documentId}: all chunks already embedded`)
     return
@@ -2021,7 +2125,10 @@ export async function handleEmbed(
     for (let j = 0; j < batchChunks.length; j++) {
       const { error: updateError } = await supabase
         .from('chunks')
-        .update({ content_embedding: JSON.stringify(embeddings[j]) })
+        .update({
+          content_embedding: JSON.stringify(embeddings[j]),
+          embedding_model: TARGET_MODEL,
+        })
         .eq('id', batchChunks[j].id)
 
       if (!updateError) embeddedCount++
@@ -2370,6 +2477,20 @@ export async function handleEntityExtract(
     .order('chunk_index', { ascending: true })
 
   if (error || !chunks) throw new Error(`Failed to fetch chunks: ${error?.message}`)
+
+  // IDEMPOTENCY CHECK: Skip if entity mentions already exist for this document.
+  // Re-running without this check creates duplicate entity_mentions.
+  const { count: existingMentions } = await supabase
+    .from('entity_mentions')
+    .select('id', { count: 'exact', head: true })
+    .eq('document_id', documentId)
+
+  if (existingMentions && existingMentions > 0) {
+    console.log(
+      `[EntityExtract] Document ${documentId}: skipping — ${existingMentions} mentions already exist`
+    )
+    return
+  }
 
   let totalEntities = 0
   let totalMentions = 0

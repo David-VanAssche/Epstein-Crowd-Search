@@ -851,7 +851,7 @@ import { LucideIcon, FileSearch, Inbox, Clock, Heart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
-type EmptyStateVariant = 'not-processed' | 'no-results' | 'coming-soon' | 'custom'
+type EmptyStateVariant = 'not-processed' | 'no-results' | 'coming-soon' | 'community-data' | 'custom'
 
 interface EmptyStateProps {
   variant?: EmptyStateVariant
@@ -883,6 +883,12 @@ const variantDefaults: Record<
     title: 'Coming Soon',
     description: 'This feature is under development.',
   },
+  'community-data': {
+    icon: Heart,
+    title: 'Community Data Available',
+    description:
+      'Search works on community-processed data. Fund AI processing for deeper analysis and more complete results.',
+  },
 }
 
 export function EmptyState({
@@ -909,21 +915,21 @@ export function EmptyState({
         {finalDescription}
       </p>
       {ctaLabel && ctaHref && (
-        <Link href={ctaHref}>
-          <Button>{ctaLabel}</Button>
-        </Link>
+        <Button asChild>
+          <Link href={ctaHref}>{ctaLabel}</Link>
+        </Button>
       )}
       {showFundingCTA && (
-        <a
-          href="https://www.gofundme.com/f/the-epstein-archive"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Button variant="outline" className="mt-2 gap-2">
+        <Button asChild variant="outline" className="mt-2 gap-2">
+          <a
+            href="https://www.gofundme.com/f/the-epstein-archive"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             <Heart className="h-4 w-4" />
             Help us process more →
-          </Button>
-        </a>
+          </a>
+        </Button>
       )}
     </div>
   )

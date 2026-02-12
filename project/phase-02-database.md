@@ -111,6 +111,12 @@ CREATE TABLE documents (
   processing_status TEXT DEFAULT 'pending',
   processing_error TEXT,
   metadata JSONB DEFAULT '{}',
+  ocr_source TEXT,           -- NULL | 's0fskr1p' | 'tensonaut' | 'pipeline' | etc.
+  ocr_text_path TEXT,        -- storage path in ocr-text/ bucket
+  embedding_source TEXT,     -- NULL | 'svetfm' | 'pipeline'
+  chunk_count INT DEFAULT 0, -- denormalized for stats
+  entity_count INT DEFAULT 0,
+  ai_summary TEXT,           -- community or pipeline-generated
   hierarchy_json JSONB,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
@@ -132,6 +138,8 @@ CREATE TABLE chunks (
   char_count INTEGER,
   token_count_estimate INTEGER,
   metadata JSONB DEFAULT '{}',
+  embedding_model TEXT,      -- 'nomic-embed-text' | 'text-embedding-004' | NULL
+  source TEXT,               -- 'svetfm' | 'benbaessler' | 'pipeline' | NULL
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(document_id, chunk_index)
 );
@@ -227,6 +235,37 @@ CREATE TABLE processing_jobs (
 );
 ```
 
+### Step 5b: Create Migration 00002b — Data Sources Table
+
+File: `supabase/migrations/00002b_data_sources.sql`
+
+```sql
+-- 00002b_data_sources.sql
+-- Tracks ingestion status from all 24 community + official data sources.
+-- Used by the Sources page and ingestion scripts.
+
+CREATE TABLE data_sources (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  source_type TEXT NOT NULL,  -- 'github' | 'huggingface' | 'kaggle' | 'web' | 'archive' | 'torrent'
+  url TEXT,
+  data_type TEXT NOT NULL,    -- 'ocr' | 'embeddings' | 'entities' | 'chunks' | 'structured' | 'raw'
+  status TEXT DEFAULT 'pending',  -- 'pending' | 'in_progress' | 'ingested' | 'partial' | 'failed' | 'unavailable'
+  expected_count INTEGER,
+  ingested_count INTEGER DEFAULT 0,
+  failed_count INTEGER DEFAULT 0,
+  error_message TEXT,
+  priority INTEGER DEFAULT 0,  -- higher = ingest first
+  ingested_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- RLS: public read
+ALTER TABLE data_sources ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public read access" ON data_sources FOR SELECT USING (true);
+```
+
 ### Step 6: Create Migration 00003 — Entity Tables
 
 File: `supabase/migrations/00003_entity_tables.sql`
@@ -246,10 +285,12 @@ CREATE TABLE entities (
   mention_count INTEGER DEFAULT 0,
   document_count INTEGER DEFAULT 0,
   metadata JSONB DEFAULT '{}',
+  source TEXT,               -- 'lmsband' | 'epstein-docs' | 'erikveland' | 'pipeline'
+  name_normalized TEXT,      -- lowercase, stripped titles/honorifics, collapsed whitespace
   is_verified BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(name, entity_type)
+  UNIQUE(name_normalized, entity_type)
 );
 
 CREATE TABLE entity_mentions (
@@ -393,6 +434,39 @@ CREATE TABLE timeline_events (
 );
 ```
 
+### Step 8b: Create Migration 00005b — Flights Table
+
+File: `supabase/migrations/00005b_flights.sql`
+
+```sql
+-- 00005b_flights.sql
+-- Structured flight data from Archive.org flight logs, epsteinsblackbook.com,
+-- and Epstein Exposed 1,700 flights. Generic timeline_events lacks flight-specific fields.
+
+CREATE TABLE flights (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  flight_date DATE,
+  departure TEXT,
+  arrival TEXT,
+  aircraft TEXT,
+  tail_number TEXT,
+  pilot TEXT,
+  passenger_names TEXT[],
+  passenger_entity_ids UUID[],
+  source TEXT,               -- 'archive_org' | 'blackbook' | 'epstein_exposed' | 'pipeline'
+  raw_text TEXT,
+  document_id UUID REFERENCES documents(id),
+  page_number INTEGER,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE flights ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public read access" ON flights FOR SELECT USING (true);
+
+CREATE INDEX idx_flights_date ON flights (flight_date);
+CREATE INDEX idx_flights_passengers ON flights USING gin (passenger_names);
+```
+
 ### Step 9: Create Migration 00006 — User Feature Tables
 
 File: `supabase/migrations/00006_user_tables.sql`
@@ -447,7 +521,8 @@ CREATE OR REPLACE FUNCTION hybrid_search_chunks_rrf(
   dataset_filter UUID DEFAULT NULL,
   doc_type_filter TEXT DEFAULT NULL,
   date_from TIMESTAMPTZ DEFAULT NULL,
-  date_to TIMESTAMPTZ DEFAULT NULL
+  date_to TIMESTAMPTZ DEFAULT NULL,
+  embedding_model_filter TEXT DEFAULT NULL
 )
 RETURNS TABLE (
   chunk_id UUID,
@@ -481,6 +556,7 @@ AS $$
       AND (doc_type_filter IS NULL OR d.classification = doc_type_filter)
       AND (date_from IS NULL OR d.date_extracted >= date_from)
       AND (date_to IS NULL OR d.date_extracted <= date_to)
+      AND (embedding_model_filter IS NULL OR c.embedding_model = embedding_model_filter)
     ORDER BY c.content_embedding <=> query_embedding
     LIMIT match_count * 2
   ),
@@ -519,7 +595,7 @@ AS $$
   FROM semantic_search s
   FULL OUTER JOIN keyword_search k ON s.id = k.id
   JOIN documents d ON d.id = COALESCE(s.document_id, k.document_id)
-  JOIN datasets ds ON ds.id = d.dataset_id
+  LEFT JOIN datasets ds ON ds.id = d.dataset_id
   ORDER BY rrf_score DESC
   LIMIT match_count;
 $$;
@@ -556,7 +632,7 @@ AS $$
            ROW_NUMBER() OVER (ORDER BY c.content_embedding <=> query_embedding_768) AS rank
     FROM chunks c
     JOIN documents d ON d.id = c.document_id
-    JOIN datasets ds ON ds.id = d.dataset_id
+    LEFT JOIN datasets ds ON ds.id = d.dataset_id
     WHERE search_documents AND c.content_embedding IS NOT NULL
       AND (dataset_filter IS NULL OR d.dataset_id = dataset_filter)
     ORDER BY c.content_embedding <=> query_embedding_768
@@ -1014,14 +1090,17 @@ File: `supabase/migrations/00010_indexes.sql`
 ```sql
 -- 00010_indexes.sql
 
--- Vector indexes (IVFFlat — cosine similarity)
-CREATE INDEX idx_chunks_embedding ON chunks USING ivfflat (content_embedding vector_cosine_ops) WITH (lists = 200);
-CREATE INDEX idx_images_visual_emb ON images USING ivfflat (visual_embedding vector_cosine_ops) WITH (lists = 100);
-CREATE INDEX idx_images_desc_emb ON images USING ivfflat (description_embedding vector_cosine_ops) WITH (lists = 100);
-CREATE INDEX idx_entities_name_emb ON entities USING ivfflat (name_embedding vector_cosine_ops) WITH (lists = 50);
-CREATE INDEX idx_redactions_embedding ON redactions USING ivfflat (context_embedding vector_cosine_ops) WITH (lists = 100);
-CREATE INDEX idx_timeline_embedding ON timeline_events USING ivfflat (content_embedding vector_cosine_ops) WITH (lists = 50);
-CREATE INDEX idx_video_chunks_embedding ON video_chunks USING ivfflat (content_embedding vector_cosine_ops) WITH (lists = 50);
+-- HNSW indexes (better recall than IVFFlat, works on empty tables)
+CREATE INDEX idx_chunks_embedding ON chunks USING hnsw (content_embedding vector_cosine_ops);
+CREATE INDEX idx_images_visual_emb ON images USING hnsw (visual_embedding vector_cosine_ops);
+CREATE INDEX idx_images_desc_emb ON images USING hnsw (description_embedding vector_cosine_ops);
+CREATE INDEX idx_entities_name_emb ON entities USING hnsw (name_embedding vector_cosine_ops);
+CREATE INDEX idx_redactions_embedding ON redactions USING hnsw (context_embedding vector_cosine_ops);
+CREATE INDEX idx_timeline_embedding ON timeline_events USING hnsw (content_embedding vector_cosine_ops);
+CREATE INDEX idx_video_chunks_embedding ON video_chunks USING hnsw (content_embedding vector_cosine_ops);
+
+-- Partial index for embedding model filtering
+CREATE INDEX idx_chunks_embedding_model ON chunks (embedding_model) WHERE embedding_model IS NOT NULL;
 
 -- GIN indexes (full-text search + trigram)
 CREATE INDEX idx_chunks_tsv ON chunks USING gin (content_tsv);
@@ -1032,6 +1111,8 @@ CREATE INDEX idx_video_chunks_tsv ON video_chunks USING gin (content_tsv);
 CREATE INDEX idx_chunks_document_id ON chunks (document_id);
 CREATE INDEX idx_entity_mentions_entity ON entity_mentions (entity_id);
 CREATE INDEX idx_entity_mentions_document ON entity_mentions (document_id);
+-- Prevent duplicate mentions from concurrent entity extraction (race condition safeguard)
+CREATE UNIQUE INDEX idx_entity_mentions_unique ON entity_mentions (document_id, entity_id, chunk_id) WHERE chunk_id IS NOT NULL;
 CREATE INDEX idx_entity_relationships_a ON entity_relationships (entity_a_id);
 CREATE INDEX idx_entity_relationships_b ON entity_relationships (entity_b_id);
 CREATE INDEX idx_redactions_status ON redactions (status);
@@ -1158,17 +1239,24 @@ CREATE MATERIALIZED VIEW corpus_stats AS
 SELECT
   (SELECT COUNT(*) FROM documents) AS total_documents,
   (SELECT COUNT(*) FROM documents WHERE processing_status = 'complete') AS processed_documents,
+  (SELECT COUNT(*) FROM documents WHERE ocr_source IS NOT NULL AND ocr_source != 'pipeline') AS community_ocr_documents,
   (SELECT SUM(page_count) FROM documents) AS total_pages,
   (SELECT COUNT(*) FROM chunks) AS total_chunks,
+  (SELECT COUNT(*) FROM chunks WHERE embedding_model = 'text-embedding-004') AS target_model_chunks,
+  (SELECT COUNT(*) FROM chunks WHERE embedding_model IS NOT NULL AND embedding_model != 'text-embedding-004') AS community_model_chunks,
   (SELECT COUNT(*) FROM images) AS total_images,
   (SELECT COUNT(*) FROM videos) AS total_videos,
   (SELECT COUNT(*) FROM entities) AS total_entities,
+  (SELECT COUNT(*) FROM entities WHERE source IS NOT NULL AND source != 'pipeline') AS community_entities,
   (SELECT COUNT(*) FROM entity_relationships) AS total_relationships,
   (SELECT COUNT(*) FROM redactions) AS total_redactions,
   (SELECT COUNT(*) FROM redactions WHERE status = 'confirmed') AS solved_redactions,
   (SELECT COUNT(*) FROM redactions WHERE status = 'corroborated') AS corroborated_redactions,
   (SELECT COUNT(*) FROM redaction_proposals) AS total_proposals,
-  (SELECT COUNT(DISTINCT user_id) FROM redaction_proposals) AS total_contributors;
+  (SELECT COUNT(DISTINCT user_id) FROM redaction_proposals) AS total_contributors,
+  (SELECT COUNT(*) FROM flights) AS total_flights,
+  (SELECT COUNT(*) FROM data_sources WHERE status = 'ingested') AS sources_ingested,
+  (SELECT COUNT(*) FROM data_sources) AS sources_total;
 -- Refresh periodically: REFRESH MATERIALIZED VIEW corpus_stats;
 ```
 
@@ -1708,7 +1796,7 @@ CREATE POLICY "Public read access" ON structured_data_extractions FOR SELECT USI
 CREATE INDEX idx_audio_files_dataset ON audio_files (dataset_id);
 CREATE INDEX idx_audio_files_status ON audio_files (processing_status);
 CREATE INDEX idx_audio_chunks_audio ON audio_chunks (audio_id);
-CREATE INDEX idx_audio_chunks_embedding ON audio_chunks USING ivfflat (content_embedding vector_cosine_ops) WITH (lists = 50);
+CREATE INDEX idx_audio_chunks_embedding ON audio_chunks USING hnsw (content_embedding vector_cosine_ops);
 CREATE INDEX idx_audio_chunks_tsv ON audio_chunks USING gin (content_tsv);
 CREATE INDEX idx_pinboard_boards_user ON pinboard_boards (user_id);
 CREATE INDEX idx_structured_data_document ON structured_data_extractions (document_id);

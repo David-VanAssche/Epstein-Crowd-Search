@@ -36,6 +36,29 @@ Get all docs/images/videos into Supabase Storage, organized by dataset, with as 
 - Python 3.11+
 - Git
 
+## Execution Ordering (Build Plan Integration)
+
+Data ingestion runs as a **parallel track** alongside the main build phases. It does NOT block the build — the platform works at zero data.
+
+**Recommended sequence:**
+1. Complete Build Phase 2 (Database) — this creates the shared migrations including `data_sources`, provenance columns, and `flights` table
+2. Run Ingest-0 (Setup) + Ingest-1 (Community Data) — immediately after Phase 2
+3. Continue Build Phases 3-6 in parallel with ingestion
+4. Documents from community ingestion use `processing_status = 'community'` — tells the worker pipeline to skip stages already satisfied by community data
+
+**Dependency on Build Phase 2:**
+- The `data_sources` table must exist before ingestion scripts can track source status
+- Provenance columns (`ocr_source`, `embedding_model`, `source`) on `documents`, `chunks`, and `entities` tables must exist before inserting community data
+- The `flights` table must exist for structured flight log data
+
+**Integration points with worker pipeline (Build Phase 6):**
+- Worker OCR stage skips documents where `ocr_source` is set (preserves community OCR, especially s0fskr1p's under-redaction text)
+- Worker chunking stage skips documents with existing embedded chunks
+- Worker entity extraction skips documents with existing entity mentions
+- Worker embedding stage records `embedding_model` and can upgrade community embeddings to target model
+
+See `project/MASTER_PLAN.md` → "Data Ingestion Integration" section for the full parallel track diagram.
+
 ## Task Tracking
 
 Each phase has a checklist of tasks. Agents should update task status as they work:

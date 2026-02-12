@@ -33,7 +33,7 @@ This is the highest-value phase. It ingests everything the community has already
 - [ ] 1.12: Ingest notesbymuneeb/epstein-emails (5,082 email threads, HuggingFace)
 - [ ] 1.13: Ingest EF20K/Datasets + Kaggle datasets (House Oversight CSVs)
 - [ ] 1.14: Ingest Archive.org flight log text
-- [ ] 1.15: Investigate Tsardoz/epstein-files-public (Sifter Labs, if data available)
+- [!] 1.15: **URGENT — Archive Tsardoz/epstein-files-public before Feb 15 shutdown**
 
 ### Progress Tracking
 - [ ] 1.16: Update `data_sources` table status for each completed source
@@ -53,7 +53,7 @@ This is the highest-value phase. It ingests everything the community has already
 2. For each `.txt` file:
    a. Parse filename to extract dataset number and original document name
    b. Upload text to `ocr-text/doj/dataset-{N}/{filename}.txt` in Supabase Storage
-   c. Upsert `documents` row: `ocr_source='s0fskr1p'`, `ocr_text_path=...`, `processing_status='ocr_complete'`
+   c. Upsert `documents` row: `ocr_source='s0fskr1p'`, `ocr_text_path=...`, `processing_status='community'`
 3. Update `data_sources` table: status='ingested', ingested_count=X
 
 ### 1.2: tensonaut/EPSTEIN_FILES_20K
@@ -228,16 +228,38 @@ This is the highest-value phase. It ingests everything the community has already
 3. Insert structured records into timeline_events or flights table
 4. Upload raw text to `ocr-text/` bucket
 
-### 1.15: Tsardoz/epstein-files-public
+### 1.15: Tsardoz/epstein-files-public — URGENT
+
+> **DEADLINE: February 15, 2026** — Sifter Labs is shutting down. After this date, the data may be permanently lost. This is Tier 4 (cross-validation only) — its loss doesn't block anything, but archive it while we can.
 
 **Source:** https://github.com/Tsardoz/epstein-files-public
 **Status:** Needs verification — main repo (Tsardoz/epstein) returned 404
 **Note:** Sifter Labs platform shutting down Feb 15, 2026
 
 **Steps:**
-1. Check repo contents — is there a database dump? Embeddings? Just code?
-2. If data exists, assess format and ingest
-3. If code-only, evaluate for reusable processing logic
+1. **Immediate:** `git clone https://github.com/Tsardoz/epstein-files-public /tmp/tsardoz`
+2. If 404: check Wayback Machine (`https://web.archive.org/web/*/https://github.com/Tsardoz/epstein-files-public`)
+3. If unavailable: mark `data_sources` row with `status='unavailable'`, move on — this is Tier 4 priority
+4. If data exists: assess format, archive locally, then ingest if valuable
+5. If code-only: evaluate for reusable processing logic
+
+### Pre-Ingestion: Source Verification
+
+> **Run this BEFORE starting any ingestion tasks.** Probes all 24 source URLs to check availability.
+
+**Steps:**
+1. Create/run `scripts/doj_uploader/verify_sources.py`:
+   - HTTP HEAD on all 24 source URLs
+   - For GitHub repos: check if repo exists (200 vs 404)
+   - For HuggingFace datasets: verify dataset is accessible
+   - Update `data_sources` table: set `status='unavailable'` for dead URLs, `status='pending'` for live ones
+2. For each live source, download first 100 rows and validate:
+   - Expected columns exist
+   - Encoding is UTF-8 (or known encoding)
+   - Data types match expected schema
+3. Report: print summary of available vs unavailable sources before proceeding
+
+This prevents wasting time on dead sources and catches schema mismatches early.
 
 ### 1.16-1.17: Progress Tracking
 

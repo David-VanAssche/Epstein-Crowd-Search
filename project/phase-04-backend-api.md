@@ -625,9 +625,22 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient()
 
-    // For now, do keyword-only search via full-text query on chunks.
-    // Phase 5 (AI providers) will add embedding generation for hybrid search.
-    // When embeddings are available, we call hybrid_search_chunks_rrf RPC instead.
+    // Detect dominant embedding model and generate query embedding if possible.
+    // Community data uses nomic-embed-text; our pipeline uses text-embedding-004.
+    // Search filters to same-model vectors to avoid comparing incompatible embeddings.
+    const { data: modelStats } = await supabase
+      .from('chunks')
+      .select('embedding_model')
+      .not('embedding_model', 'is', null)
+      .limit(1)
+      // Note: Full implementation uses: SELECT embedding_model, COUNT(*) FROM chunks
+      // GROUP BY embedding_model ORDER BY count DESC LIMIT 1
+      // Simplified here; Phase 6 will add the RPC call with embedding_model_filter.
+
+    const dominantModel = modelStats?.[0]?.embedding_model || null
+    // When embedding API keys are available, generate query embedding with matching model
+    // and call hybrid_search_chunks_rrf with embedding_model_filter = dominantModel.
+    // For now, fall back to keyword-only search.
 
     const offset = (input.page - 1) * input.per_page
 
@@ -912,6 +925,91 @@ export async function POST(request: NextRequest) {
     const paginatedResults = results.slice(0, input.per_page)
 
     return paginated(paginatedResults, input.page, input.per_page, results.length)
+  } catch (err) {
+    return handleApiError(err)
+  }
+}
+```
+
+### Step 8b: Create the stats API route
+
+File: `app/api/stats/route.ts`
+
+Returns enriched corpus stats from the `corpus_stats` materialized view, including community data counters.
+
+```typescript
+// app/api/stats/route.ts
+import { createClient } from '@/lib/supabase/server'
+import { success, handleApiError } from '@/lib/api/responses'
+
+export async function GET() {
+  try {
+    const supabase = await createClient()
+
+    const { data: stats, error } = await supabase
+      .from('corpus_stats')
+      .select('*')
+      .single()
+
+    if (error) {
+      // View may not be refreshed yet — return zeros
+      return success({
+        total_documents: 0,
+        processed_documents: 0,
+        community_ocr_documents: 0,
+        total_pages: 0,
+        total_chunks: 0,
+        target_model_chunks: 0,
+        community_model_chunks: 0,
+        total_images: 0,
+        total_videos: 0,
+        total_entities: 0,
+        community_entities: 0,
+        total_relationships: 0,
+        total_redactions: 0,
+        solved_redactions: 0,
+        corroborated_redactions: 0,
+        total_proposals: 0,
+        total_contributors: 0,
+        total_flights: 0,
+        sources_ingested: 0,
+        sources_total: 0,
+      })
+    }
+
+    return success(stats)
+  } catch (err) {
+    return handleApiError(err)
+  }
+}
+```
+
+### Step 8c: Create the sources API route
+
+File: `app/api/sources/route.ts`
+
+Returns all `data_sources` rows for the Sources status page.
+
+```typescript
+// app/api/sources/route.ts
+import { createClient } from '@/lib/supabase/server'
+import { success, handleApiError } from '@/lib/api/responses'
+
+export async function GET() {
+  try {
+    const supabase = await createClient()
+
+    const { data: sources, error } = await supabase
+      .from('data_sources')
+      .select('id, name, source_type, url, data_type, status, expected_count, ingested_count, failed_count, error_message, priority, ingested_at')
+      .order('priority', { ascending: false })
+      .order('name', { ascending: true })
+
+    if (error) {
+      throw new Error(`Failed to fetch data sources: ${error.message}`)
+    }
+
+    return success(sources || [])
   } catch (err) {
     return handleApiError(err)
   }
