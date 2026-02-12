@@ -127,7 +127,7 @@ CREATE POLICY "Auth users can submit reviews" ON document_reviews FOR INSERT WIT
 
 ALTER TABLE research_bounties ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public read access" ON research_bounties FOR SELECT USING (true);
-CREATE POLICY "Auth users can create bounties" ON research_bounties FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Auth users can create bounties" ON research_bounties FOR INSERT WITH CHECK (auth.uid() = created_by);
 CREATE POLICY "Creators can update own bounties" ON research_bounties FOR UPDATE USING (auth.uid() = created_by) WITH CHECK (auth.uid() = created_by);
 
 -- Indexes for collaborative research
