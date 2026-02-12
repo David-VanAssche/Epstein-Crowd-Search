@@ -19,7 +19,7 @@ console = Console()
 
 BUCKET_NAME = "raw-archive"
 MAX_STANDARD_UPLOAD = 50 * 1024 * 1024
-CONCURRENT_UPLOADS = 20
+CONCURRENT_UPLOADS = int(os.environ.get("CONCURRENT_UPLOADS", "20"))
 
 
 def get_client() -> Client:
@@ -175,7 +175,17 @@ def upload_directory(client: Client, local_dir: str, remote_prefix: str,
             upload_manifest(client, source_key, manifest, stats)
         return stats
 
-    console.print(f"[cyan]Uploading {len(to_upload)} files with {CONCURRENT_UPLOADS} parallel workers...[/cyan]")
+    # Auto-reduce workers for large files to avoid OOM on small VMs
+    avg_file_size = sum(sz for _, _, sz in to_upload) / max(len(to_upload), 1)
+    if avg_file_size > 5 * 1024 * 1024:  # avg > 5MB
+        workers = min(CONCURRENT_UPLOADS, 3)
+    elif avg_file_size > 1 * 1024 * 1024:  # avg > 1MB
+        workers = min(CONCURRENT_UPLOADS, 8)
+    else:
+        workers = CONCURRENT_UPLOADS
+
+    console.print(f"[cyan]Uploading {len(to_upload)} files with {workers} parallel workers "
+                  f"(avg {avg_file_size/1024:.0f}KB/file)...[/cyan]")
 
     # Get credentials for worker threads (each creates its own client)
     url = os.environ["SUPABASE_URL"]
@@ -191,7 +201,7 @@ def upload_directory(client: Client, local_dir: str, remote_prefix: str,
     ) as progress:
         task = progress.add_task("Uploading", total=len(to_upload), uploaded_mb=0)
 
-        with ThreadPoolExecutor(max_workers=CONCURRENT_UPLOADS) as executor:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {
                 executor.submit(upload_file_worker, url, key, lp, rp): (lp, rp, sz)
                 for lp, rp, sz in to_upload
