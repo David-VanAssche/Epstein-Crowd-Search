@@ -383,11 +383,11 @@ export async function POST(request: NextRequest) {
 }
 ```
 
-### Worker Example
+### Batch Script Example
 
 ```typescript
-// worker/src/services/embedding-service.ts
-import { getEmbeddingProvider } from '../ai/factory'
+// scripts/batch/embed-chunks.ts
+import { getEmbeddingProvider } from '@/lib/ai/factory'
 
 export async function embedChunks(chunks: string[]): Promise<number[][]> {
   const embedder = getEmbeddingProvider()
@@ -495,7 +495,7 @@ A two-tier cache sits in front of embedding providers:
 Request → L1 (in-memory LRU, ~10K entries) → L2 (Supabase lookup) → Provider API
 ```
 
-The cache is implemented in `worker/src/services/embedding-cache.ts` and wraps any `EmbeddingProvider`. This avoids re-embedding identical chunks across processing runs.
+The cache is implemented in `lib/pipeline/services/embedding-cache.ts` and wraps any `EmbeddingProvider`. This avoids re-embedding identical chunks across processing runs.
 
 ```typescript
 export class CachedEmbeddingProvider implements EmbeddingProvider {

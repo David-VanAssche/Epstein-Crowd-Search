@@ -1530,11 +1530,10 @@ NEXT_PUBLIC_GOFUNDME_URL=https://www.gofundme.com/your-campaign
 # OAuth providers (Google, GitHub) are set up there.
 # No extra env vars needed for basic email + OAuth auth.
 
-# --- Worker (Cloud Run) ---
-# These are only needed for the document processing worker.
-# GOOGLE_CLOUD_PROJECT=your-project
-# GOOGLE_CLOUD_REGION=us-central1
-# WORKER_CONCURRENCY=5
+# --- Batch Processing ---
+# Batch scripts in scripts/batch/ run locally or on a cloud VM.
+# No separate worker service is needed.
+# BATCH_CONCURRENCY=5
 ```
 
 ### Step 10: Environment variable validation
@@ -2025,132 +2024,22 @@ jobs:
             })
 ```
 
-### Step 15: Worker deployment
+### Step 15: Deployment notes
 
-#### File: `worker/Dockerfile`
+<!-- NOTE: No worker Dockerfile or Cloud Run deployment needed. The application is deployed entirely on Vercel (frontend + API routes). Batch processing scripts run locally or on a cloud VM via `npx tsx scripts/batch/run-all.ts`. No Docker, no Cloud Run, no Redis. -->
 
-```dockerfile
-# worker/Dockerfile
-# Document processing worker for Cloud Run
+**Deployment architecture:** Vercel-only. No separate worker server.
 
-FROM node:20-alpine AS base
-WORKDIR /app
+- **Frontend + API routes**: Deployed to Vercel via `vercel deploy --prod` or GitHub Actions
+- **Batch processing**: Run locally or on a cloud VM with `npx tsx scripts/batch/run-all.ts`
+- **Chat API**: Lives in `app/api/chat/route.ts` — deployed with the Next.js app on Vercel
+- **No Docker**: Batch scripts run directly with Node.js + tsx
+- **No Redis**: Rate limiting uses Upstash Redis (serverless, no local install)
 
-# Install dependencies
-FROM base AS deps
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile --prod
-
-# Build
-FROM base AS builder
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile
-COPY . .
-RUN pnpm run build:worker
-
-# Production
-FROM base AS runner
-ENV NODE_ENV=production
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 worker
-USER worker
-
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=builder /app/dist/worker ./dist/worker
-COPY --from=builder /app/package.json ./package.json
-
-# Health check endpoint
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
-
-EXPOSE 8080
-
-CMD ["node", "dist/worker/index.js"]
-```
-
-#### File: `worker/deploy.sh`
-
-```bash
-#!/bin/bash
-# worker/deploy.sh
-# Deploy the document processing worker to Google Cloud Run.
-
-set -euo pipefail
-
-# Configuration
-PROJECT_ID="${GOOGLE_CLOUD_PROJECT:-epstein-archive}"
-REGION="${GOOGLE_CLOUD_REGION:-us-central1}"
-SERVICE_NAME="epstein-worker"
-IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
-
-echo "Building container image..."
-docker build -t "${IMAGE_NAME}" -f worker/Dockerfile .
-
-echo "Pushing to Container Registry..."
-docker push "${IMAGE_NAME}"
-
-echo "Deploying to Cloud Run..."
-gcloud run deploy "${SERVICE_NAME}" \
-  --image "${IMAGE_NAME}" \
-  --region "${REGION}" \
-  --project "${PROJECT_ID}" \
-  --platform managed \
-  --memory 2Gi \
-  --cpu 2 \
-  --min-instances 0 \
-  --max-instances 5 \
-  --timeout 3600 \
-  --concurrency 5 \
-  --set-env-vars "NODE_ENV=production" \
-  --set-secrets "\
-SUPABASE_SERVICE_ROLE_KEY=supabase-service-role-key:latest,\
-OPENAI_API_KEY=openai-api-key:latest,\
-ANTHROPIC_API_KEY=anthropic-api-key:latest" \
-  --allow-unauthenticated=false
-
-echo "Deployment complete."
-echo "Service URL: $(gcloud run services describe ${SERVICE_NAME} --region ${REGION} --project ${PROJECT_ID} --format 'value(status.url)')"
-```
-
-#### File: `docker-compose.yml`
-
-```yaml
-# docker-compose.yml
-# Local development with Redis for rate limiting
-
-version: '3.8'
-
-services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - '6379:6379'
-    volumes:
-      - redis-data:/data
-    command: redis-server --appendonly yes
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  # Optional: Run worker locally
-  # worker:
-  #   build:
-  #     context: .
-  #     dockerfile: worker/Dockerfile
-  #   environment:
-  #     - NODE_ENV=development
-  #     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
-
-volumes:
-  redis-data:
-```
+For large-scale batch processing (e.g., the initial 3.5M page import), consider:
+1. A cloud VM (e.g., AWS EC2 or GCP Compute Engine) with a GPU for local Whisper transcription
+2. Bedrock Batch Inference for embeddings (submit JSONL to S3, 50% cheaper)
+3. Multiple terminal sessions running different `--stage` flags in parallel
 
 ### Step 16: Testing configuration
 
@@ -2969,7 +2858,7 @@ Fix any TypeScript errors. The most common will be import path issues or missing
 
 9. **GitHub Actions secrets:** The CI workflow references `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` as GitHub secrets. These must be configured in the repository Settings > Secrets and variables > Actions before the deploy preview workflow will run.
 
-10. **Worker Dockerfile build context:** The `docker build` command in `deploy.sh` uses the project root as the build context (not the `worker/` directory). This is intentional -- the worker needs access to shared `lib/` code. Make sure the `Dockerfile` path is specified with `-f worker/Dockerfile`.
+10. **Batch script environment:** The batch scripts in `scripts/batch/` share code from `lib/` and use the same environment variables as the main app. Run them with `npx tsx scripts/batch/run-all.ts`. They are designed to run locally or on a cloud VM -- no Docker or separate deployment needed.
 
 ---
 
@@ -3029,9 +2918,6 @@ sentry.edge.config.ts
 vitest.config.ts
 vitest.setup.ts
 docker-compose.yml
-worker/
-├── Dockerfile
-└── deploy.sh
 scripts/
 └── production-check.sh
 .github/workflows/
@@ -3064,7 +2950,7 @@ scripts/
 21. GitHub Actions CI runs lint, typecheck, test, and build on every PR
 22. `.env.example` documents all required and optional environment variables
 23. `vercel.json` configures function timeouts, crons, and redirects
-24. Worker Dockerfile builds successfully with `docker build`
+24. Batch scripts in `scripts/batch/` run successfully with `npx tsx`
 25. No `console.log` statements in production code (only `console.error` for actual errors)
 26. All placeholder URLs and values are clearly marked with `TODO:` comments
 27. `scripts/production-check.sh` runs all checks and reports pass/fail
@@ -3080,4 +2966,4 @@ scripts/
 - Rate limits are conservative: 30 searches/min, 10 chats/min, 10 proposals/day. These can be adjusted per deployment via Upstash dashboard.
 - The production check script is designed to run in CI and locally. It exits with a non-zero code if any critical check fails.
 - Vercel deployment is zero-config beyond `vercel.json` -- push to main triggers production deploy, PRs get preview deploys.
-- The Worker Dockerfile uses multi-stage builds to minimize the final image size. Only production dependencies and built output are included.
+- Batch processing scripts in `scripts/batch/` are run with `npx tsx` and share code from `lib/`. They require the same `.env.local` as the main app and are designed to run locally or on a cloud VM without Docker.

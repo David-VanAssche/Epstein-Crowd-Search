@@ -19,14 +19,14 @@ The platform is designed to maximize community participation in consuming eviden
 |---|---|
 | Frontend | Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS, shadcn/ui |
 | Backend | Supabase (PostgreSQL 15 + pgvector, Auth, Storage, Edge Functions) |
-| Worker | Node.js 20+ standalone pipeline (Express + BullMQ/polling) |
+| Batch Processing | Node.js scripts (`scripts/batch/`) for one-time bulk import; inline embedding in Next.js API routes for user content |
 | Search | pgvector (cosine) + pg_trgm + tsvector (BM25) + RRF fusion |
 | Embeddings | Amazon Nova Multimodal Embeddings v1 (1024d unified text/image/video/audio via AWS Bedrock) |
 | OCR | Google Cloud Document AI |
 | Reranking | Cohere rerank-english-v3.0 |
 | Chat LLM | Gemini 2.0 Flash (free tier), Claude Sonnet/Opus (paid tier) |
 | Auth | Supabase Auth (email + OAuth via Google/GitHub) |
-| Deployment | Vercel (frontend), Supabase (DB/auth/storage), Cloud Run (worker) |
+| Deployment | Vercel (frontend + API), Supabase (DB/auth/storage) |
 
 ## Key Decisions
 
@@ -55,7 +55,7 @@ The build is a single interleaved sequence where each step includes building fea
 | 7 | Phase 3 (Core UI) + Phase 4 (Backend API) | — (refresh materialized views) | Search returns real results with working citations |
 | 8 | ZIP streaming module | DOJ Datasets 5+6 (~112MB PDFs) | PDFs merge with existing OCR rows, not duplicate |
 | 9 | Phase 5 (Interactive Features) | — | Chat cites real docs, annotations persist |
-| 10 | Phase 6 (Worker Pipeline) | — (process Step 8 PDFs) | Skip logic preserves community data |
+| 10 | Phase 6 (Batch Processing) | — (process Step 8 PDFs) | Skip logic preserves community data |
 | 11 | — | DOJ Datasets 1-4, 7, 8, 12 (~13GB PDFs) | All ZIPs uploaded, document counts match |
 | 12 | Phase 7 (Funding/Stats) | — | Coverage heatmap accurate, stats reflect real data |
 | 13 | Phase 8 (Visualization) | — | Graph renders 86K entities, map has real markers |
@@ -72,7 +72,7 @@ Step 0 (archive Tsardoz) — independent, do immediately
 Step 1 (Foundation + Supabase) → Step 2 (Database + seeds)
   → Step 3 (OCR text import) → Step 4 (chunks + embeddings) → Step 5 (entities) → Step 6 (structured data)
     → Step 7 (Core UI + API — tested against real data)
-      → Step 8 (DOJ ZIP test) → Step 9 (Interactive Features) → Step 10 (Worker Pipeline)
+      → Step 8 (DOJ ZIP test) → Step 9 (Interactive Features) → Step 10 (Batch Processing)
         → Step 11 (Full DOJ upload) → Step 12 (Funding/Stats) → Step 13 (Visualization)
           → Step 14 (Large-scale ingestion) → Step 15 (Verification) → Step 16 (Deploy) → Step 17 (Gamification) → Step 18 (Final acceptance)
 
@@ -83,7 +83,7 @@ Parallel: Steps 3-4 can run concurrently with Steps 5-6 if two engineers availab
 
 1. **Build a feature, import its data, test immediately** — no empty-state-only development
 2. **Data import IS the test** — vector dimension mismatches, dedup failures, foreign key violations surface on import, not months later
-3. **Worker pipeline tests against community data** — skip logic can only be validated when documents already have OCR/chunks/entities
+3. **Batch pipeline tests against community data** — skip logic can only be validated when documents already have OCR/chunks/entities
 4. **Smallest data first** — markramm (2,895 files) before s0fskr1p (5GB), svetfm/nov11 (69K) before svetfm/fbi (236K)
 5. **Search is the E2E MVP** — Step 7 is the first time a user can search, see results, and click into a real document
 
@@ -97,12 +97,12 @@ Parallel: Steps 3-4 can run concurrently with Steps 5-6 if two engineers availab
 | LMSBAND (835MB SQLite) | 5 | Entity graph (D3), Entity skip | Epstein node → connected entities render |
 | notesbymuneeb (5,082 threads) | 6 | Email thread view, Timeline | Open thread → chronological email view |
 | s0fskr1p (5GB OCR) | 3 | Redaction dashboard, Under-redaction text | View redaction → highlighted region with hidden text |
-| DOJ ZIPs (13GB) | 8, 11 | PDF viewer, Worker pipeline at scale | PDFs merge with community OCR rows |
+| DOJ ZIPs (13GB) | 8, 11 | PDF viewer, Batch pipeline at scale | PDFs merge with community OCR rows |
 
 ### Highest-Risk Integration Points
 
 1. **Chunk-to-document mapping (Step 4)** — Community data identifies documents by filename; the database uses UUIDs. If the mapping is wrong, every citation in the application is broken.
-2. **Worker skip logic (Step 10)** — If the pipeline overwrites community data, thousands of dollars of free processing are destroyed. Can only be tested with community data already present.
+2. **Batch skip logic (Step 10)** — If the pipeline overwrites community data, thousands of dollars of free processing are destroyed. Can only be tested with community data already present.
 3. **Entity deduplication (Step 5)** — 86K entities from 4 sources with name variations ("Ghislaine Maxwell" / "GHISLAINE MAXWELL" / "G. Maxwell"). The `name_normalized` + `pg_trgm` approach gets its first real test.
 
 ### Key Reconciliation Decisions
@@ -110,7 +110,7 @@ Parallel: Steps 3-4 can run concurrently with Steps 5-6 if two engineers availab
 1. **Unified embedding model**: All embeddings use Amazon Nova Multimodal Embeddings v1 (1024d) via AWS Bedrock. One model, one vector space for text, images, video, and audio. Community data (nomic-embed-text 768d) is re-embedded with Nova during Phase 6 pipeline processing (~$19 for 365K chunks). The `embedding_model` column tracks which model was used; the pipeline re-embeds any chunk where `embedding_model !== TARGET_MODEL`. Cross-modal search works natively — a text query matches documents, images, video frames, and audio in a single cosine similarity pass.
 2. **Entity deduplication**: `name_normalized` column catches case/whitespace/title differences at ingest time. `pg_trgm` batch job merges similar entities post-ingest. Pipeline embedding-based dedup handles semantic matches.
 3. **HNSW over IVFFlat**: IVFFlat on empty tables creates degenerate indexes. HNSW works at any table size. Can switch back after data loads if memory is tight.
-4. **Worker skip logic**: Pipeline stages check document state before running. Community OCR (especially s0fskr1p's under-redaction text) is never overwritten. Community chunks with embeddings are never deleted.
+4. **Batch skip logic**: Pipeline stages check document state before running. Community OCR (especially s0fskr1p's under-redaction text) is never overwritten. Community chunks with embeddings are never deleted.
 
 ## File Counts by Phase
 
@@ -121,7 +121,7 @@ Parallel: Steps 3-4 can run concurrently with Steps 5-6 if two engineers availab
 | 3 | ~35 (10 pages + 20 components + 5 hooks) |
 | 4 | ~35 (AI abstractions + search lib + 20 API routes + middleware) |
 | 5 | ~35 (chat + redaction + contribution + annotations + investigation threads) |
-| 6 | ~35 (worker scaffold + 12 services + chatbot + audio + scripts) |
+| 6 | ~25 (batch scripts + services + chat API route) |
 | 7 | ~20 (funding + stats + coverage heatmap + daily features) |
 | 8 | ~20 (graph + timeline + cascade + map + pinboard) |
 | 9 | ~25 (loading states + tests + deploy config + SEO + safety) |
@@ -161,13 +161,17 @@ epstein-archive/
 │   ├── chat/                  # Chat service, streaming utils
 │   ├── utils/                 # Citations, dates, storage
 │   └── hooks/                 # useSearch, useChat, useEntity, useRedaction
-├── worker/                    # Standalone Node.js pipeline
-│   └── src/
-│       ├── pipeline/          # Orchestrator, job queue, stages
-│       ├── services/          # OCR, chunking, embedding, entity extraction
-│       ├── chatbot/           # Chat orchestrator + 8 tools
-│       └── api/               # Express chat route
 ├── scripts/                   # Download, seed, ingest, cost estimation
+│   ├── doj_uploader/          # Python upload CLI (community + DOJ data)
+│   └── batch/                 # One-time bulk processing (Node.js)
+│       ├── embed-chunks.ts    # Re-embed all chunks with Nova 1024d
+│       ├── extract-entities.ts # Entity extraction from documents
+│       ├── classify-docs.ts   # Document classification
+│       ├── detect-redactions.ts # Redaction detection
+│       ├── extract-timeline.ts # Timeline event extraction
+│       ├── generate-summaries.ts # Document summarization
+│       ├── score-criminal.ts  # Criminal indicator scoring
+│       └── process-media.ts   # Image classification + video transcription
 ├── supabase/migrations/       # 15 SQL migrations
 ├── types/                     # TypeScript type definitions
 └── public/                    # Static assets
@@ -208,7 +212,7 @@ epstein-archive/
 8. **Entity functions** — entity connection graph, entity search, mention aggregation
 9. **Redaction functions** — solvable feed, cascade tree, stats, confidence scoring
 10. **Indexes** — All vector (ivfflat), GIN, B-tree indexes
-11. **RLS policies** — Public read, auth write, service role for worker
+11. **RLS policies** — Public read, auth write, service role for batch scripts
 12. **Stats views** — corpus_stats materialized view
 13. **Funding tables** — funding_status, processing_spend_log, donation_impact_tiers
 14. **Contribution tables** — image_match_submissions, intelligence_hints, contribution_activity
@@ -301,7 +305,6 @@ See `.env.example` for the complete list. Key categories:
 - Cohere (reranking)
 - Chat LLMs (Gemini, Anthropic)
 - Application (site URL, GoFundMe URL)
-- Worker (concurrency, port, Redis)
 - Funding (GoFundMe widget URL, admin secret)
 
 ## Monetization (Future — Infrastructure Only)

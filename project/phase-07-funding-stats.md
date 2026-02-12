@@ -8,7 +8,7 @@ Build the live funding tracker page, donation impact calculator, spend transpare
 
 ## IMPORTANT: Cost Model
 
-The $2.10 per 1,000 pages cost model is the basis for all impact calculations throughout this phase. Spend log entries are created by the worker pipeline (Phase 6) — this phase only reads and displays them. The GoFundMe widget uses a placeholder `<iframe>` with a comment explaining how to get the real widget URL.
+The $2.10 per 1,000 pages cost model is the basis for all impact calculations throughout this phase. Spend log entries are created by the batch processing pipeline (Phase 6) — this phase only reads and displays them. The GoFundMe widget uses a placeholder `<iframe>` with a comment explaining how to get the real widget URL.
 
 ---
 
@@ -739,7 +739,7 @@ export function ProcessingLiveFeed() {
     queryKey: ['processing', 'live-feed'],
     queryFn: () => fetch('/api/processing/recent').then((r) => r.json()),
     refetchInterval: 10_000,
-    // Disabled until API route exists — Phase 6 creates the worker that produces events
+    // Disabled until API route exists — Phase 6 batch pipeline produces processing events
     enabled: false,
   })
 
@@ -752,7 +752,7 @@ export function ProcessingLiveFeed() {
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm">Live Processing Feed</CardTitle>
           <Badge variant={isActive ? 'default' : 'secondary'}>
-            {isActive ? 'Processing' : 'Worker Idle'}
+            {isActive ? 'Processing' : 'Pipeline Idle'}
           </Badge>
         </div>
       </CardHeader>
@@ -776,7 +776,7 @@ export function ProcessingLiveFeed() {
           </ScrollArea>
         ) : (
           <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
-            Worker idle. Processing events will appear here in real time when the pipeline is running.
+            Pipeline idle. Processing events will appear here in real time when batch processing is running.
           </div>
         )}
       </CardContent>
@@ -2307,11 +2307,11 @@ Fix any TypeScript errors. The most common will be import path issues or missing
 
 2. **Cost model consistency:** The $2.10 per 1,000 pages formula must be consistent across all components: the impact calculator, tier cards, spend log, and funding progress. The constant `COST_PER_PAGE = 2.10 / 1000` should be the single source of truth. If the cost model changes, update the constant in the API route — all components derive from it.
 
-3. **Spend log entries come from Phase 6:** The spend transparency log only *displays* entries. The worker pipeline (Phase 6) *creates* them in the `processing_spend_log` table. This phase must handle the case where the table is empty gracefully.
+3. **Spend log entries come from Phase 6:** The spend transparency log only *displays* entries. The batch processing pipeline (Phase 6) *creates* them in the `processing_spend_log` table. This phase must handle the case where the table is empty gracefully.
 
 4. **Processing live feed polling:** Use polling (every 10 seconds) for v1. The `enabled: false` flag keeps it from firing until the API route exists. In v2, replace with Server-Sent Events (SSE) for true real-time updates.
 
-5. **Stats from materialized view:** The `corpus_stats` materialized view needs periodic refresh (Phase 6 worker handles this). Stats may be slightly stale. Show the `last_updated` timestamp when available.
+5. **Stats from materialized view:** The `corpus_stats` materialized view needs periodic refresh (Phase 6 batch scripts handle this). Stats may be slightly stale. Show the `last_updated` timestamp when available.
 
 6. **Animated numbers on load:** The `AnimatedNumber` component uses `setInterval` for the counting animation. Make sure the cleanup function clears the interval to avoid memory leaks. The animation only runs once when the component mounts with data.
 
@@ -2378,7 +2378,7 @@ components/document/DocumentViewer.tsx    — Add funding footer (DonationCTA va
 2. Impact calculator slider is interactive ($1-$1,000) with logarithmic scale and live output
 3. All 10 donation impact tier cards display correctly in responsive grid (2 cols mobile, 5 cols desktop)
 4. Spend transparency log shows empty state ("No processing spend yet") with service filter dropdown
-5. Processing live feed shows "Worker Idle" badge state
+5. Processing live feed shows "Pipeline Idle" badge state
 6. Funding status API returns `{ raised, goal, percentage, donor_count, last_updated }`
 7. Impact API calculates correct pages for a given amount (using $2.10/1K pages formula)
 8. Spend log API returns paginated results with service/date filters

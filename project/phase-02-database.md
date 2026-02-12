@@ -2757,9 +2757,9 @@ Alternatively, apply migrations via the Supabase SQL editor in the dashboard —
 
 2. **IVFFlat indexes on empty tables:** IVFFlat requires data for optimal indexing. On empty tables with pgvector 0.7+, the CREATE INDEX succeeds but won't be optimized. Consider running `REINDEX` after initial data seeding, or switch to HNSW indexes for small datasets.
 
-3. **Materialized views need refresh:** `corpus_stats` and `weekly_leaderboard` are snapshots. They don't auto-update. Phase 6 (worker) and Phase 10 (gamification) handle refreshing these.
+3. **Materialized views need refresh:** `corpus_stats` and `weekly_leaderboard` are snapshots. They don't auto-update. Phase 6 (batch scripts) and Phase 10 (gamification) handle refreshing these.
 
-4. **RLS and service role:** The Supabase service role key (`SUPABASE_SERVICE_ROLE_KEY`) bypasses all RLS policies automatically. No explicit service role policies are needed — the worker uses the admin client.
+4. **RLS and service role:** The Supabase service role key (`SUPABASE_SERVICE_ROLE_KEY`) bypasses all RLS policies automatically. No explicit service role policies are needed — batch scripts and server-side API routes use the admin client.
 
 5. **Auth user references:** Tables referencing `auth.users(id)` (like `user_profiles`, `redaction_proposals`, etc.) require that a user exists in Supabase Auth before inserting. The `user_profiles` table is populated on first login via an auth trigger or API route (handled in Phase 4).
 

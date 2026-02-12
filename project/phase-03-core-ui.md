@@ -1758,7 +1758,7 @@ interface DocumentSummaryProps {
 }
 
 export function DocumentSummary({ document }: DocumentSummaryProps) {
-  // AI summary will be populated by worker pipeline in Phase 6
+  // AI summary will be populated by batch processing pipeline in Phase 6
   return (
     <Card className="border-border bg-surface">
       <CardHeader className="pb-3">

@@ -103,7 +103,7 @@ Write `tsconfig.json`:
     "target": "ES2022"
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "worker"]
+  "exclude": ["node_modules"]
 }
 ```
 
@@ -1097,8 +1097,7 @@ DOCUMENT_AI_PROCESSOR_ID=your-processor-id
 # ======================
 # AI Provider Selection (defaults shown)
 # ======================
-EMBEDDING_PROVIDER=google-vertex
-VISUAL_EMBEDDING_PROVIDER=google-multimodal
+EMBEDDING_PROVIDER=amazon-nova
 FREE_CHAT_PROVIDER=gemini-flash
 PAID_CHAT_PROVIDER=anthropic
 RERANK_PROVIDER=cohere
@@ -1134,11 +1133,10 @@ NEXT_PUBLIC_GITHUB_URL=https://github.com/David-VanAssche/Epstein-Crowd-Search
 FUNDING_ADMIN_SECRET=
 
 # ======================
-# Worker (standalone process)
+# Batch Processing
 # ======================
-WORKER_CONCURRENCY=5
-WORKER_PORT=8080
-REDIS_URL=redis://localhost:6379
+BATCH_CONCURRENCY=5
+BATCH_MAX_RETRIES=3
 ```
 
 Write `.gitignore`:
@@ -1188,9 +1186,6 @@ Thumbs.db
 # data (downloaded datasets)
 data/
 
-# worker
-worker/node_modules/
-worker/dist/
 ```
 
 Write `CLAUDE.md`:

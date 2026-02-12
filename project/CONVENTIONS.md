@@ -7,7 +7,7 @@
 - **TypeScript** everywhere — no plain JavaScript files
 - **Strict mode** enabled (`"strict": true` in tsconfig)
 - Target **ES2022** / module **ESNext**
-- Node.js **20+** for worker
+- Node.js **20+** for batch scripts
 
 ## Package Management
 
@@ -209,7 +209,7 @@ import { createClient } from '@/lib/supabase/client'
 // Server components / route handlers
 import { createClient } from '@/lib/supabase/server'
 
-// Admin operations (worker, API routes needing service role)
+// Admin operations (batch scripts, API routes needing service role)
 import { createAdminClient } from '@/lib/supabase/admin'
 ```
 

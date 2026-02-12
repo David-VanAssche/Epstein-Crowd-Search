@@ -1,136 +1,80 @@
-# Phase 6: Worker Pipeline
+# Phase 6: Batch Processing Pipeline
 
 > **Sessions:** 3-4 | **Dependencies:** Phase 2 (database schema, types), Phase 4 (AI abstractions in `lib/ai/`) | **Parallel with:** Nothing (depends on Phase 4)
 
 ## Summary
 
-Build the standalone Node.js worker process that powers the entire document-processing pipeline and the AI chatbot. The worker is a separate project (`worker/`) with its own `package.json`, TypeScript config, and Express server. It connects to the same Supabase project using a service-role key and shares AI provider interfaces from the main project.
+Build the one-time batch processing pipeline that enriches the entire document corpus. There is **no persistent worker server** — 99.99% of documents are a one-time bulk import, not a continuous stream. The pipeline is a set of Node.js scripts in `scripts/batch/` and shared service modules in `lib/pipeline/`, run locally or on a cloud VM via `npx tsx`.
 
 The pipeline has 12 stages: OCR, classification, chunking, contextual headers, text embedding, visual embedding, entity extraction, relationship mapping, redaction detection, timeline extraction, document summarization, and criminal indicator scoring. Additional services handle audio/video transcription, structured data extraction, entity merge detection, pattern detection, and the redaction cascade engine.
 
-The worker also hosts the chat API — an agentic tool-calling loop with RAG retrieval, intent classification, 8 specialized tools, and streaming SSE output. Operational scripts handle dataset downloads, sample seeding, directory ingestion, and cost estimation.
+User-generated content (proposals, hints, annotations) is embedded **inline** in Next.js API route handlers — no queue or background worker needed for these small, infrequent writes. The chat API lives in `app/api/chat/route.ts` as a Next.js API route with SSE streaming.
+
+**Why no worker?** The Epstein DOJ files are a fixed corpus. Once processed, documents don't change. Users contribute notes and annotations, not new documents. A persistent server polling for jobs is unnecessary overhead — batch scripts are simpler, cheaper, and can leverage Bedrock Batch Inference (50% discount) for the bulk embedding pass.
 
 ## IMPORTANT: Pre-requisites
 
 Before starting Phase 6, verify:
 1. Phase 2 is complete (all 18 migrations applied, types defined)
-2. Phase 4 is complete (AI provider interfaces in `lib/ai/` — `OCRProvider`, `EmbeddingProvider`, `ChatProvider`, `ClassifierProvider`, `TranscriptionProvider`, `VisualEmbeddingProvider`, `RerankProvider`)
-3. You have API keys for at least one provider per interface (e.g., Google AI for OCR/embeddings/chat, Cohere for reranking)
-4. Redis is available locally or you plan to use the polling-based fallback queue
-5. Supabase service role key is available (not the anon key — the worker needs full access)
+2. Phase 4 is complete (AI provider interfaces in `lib/ai/` — `OCRProvider`, `EmbeddingProvider`, `ChatProvider`, `ClassifierProvider`, `TranscriptionProvider`, `MultimodalEmbeddingProvider`, `RerankProvider`)
+3. You have API keys for at least one provider per interface (e.g., Google AI for OCR, AWS for embeddings, Cohere for reranking)
+4. Supabase service role key is available (not the anon key — batch scripts need full access)
 
 ---
 
 ## Step-by-Step Execution
 
-### Step 1: Initialize the worker project
+### Step 1: Set up batch processing infrastructure
 
-Create the standalone Node.js project inside `worker/`.
+No separate project needed — batch scripts live in `scripts/batch/` and share the root project's dependencies. Pipeline service modules live in `lib/pipeline/`.
 
 ```bash
-mkdir -p worker/src/{pipeline,services,chatbot/tools,api}
-cd worker
-pnpm init
+mkdir -p scripts/batch lib/pipeline/services lib/chat/tools
 ```
 
-File: `worker/package.json`
+Add batch-specific dependencies to the root `package.json`:
 
+```bash
+pnpm add pdf-parse sharp lru-cache crypto-js uuid dotenv
+pnpm add -D @types/crypto-js @types/uuid tsx
+```
+
+Add batch scripts to `package.json`:
 ```json
 {
-  "name": "epstein-worker",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
-    "build": "tsc",
-    "lint": "eslint src/",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.39.0",
-    "bullmq": "^5.1.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "ioredis": "^5.3.2",
-    "zod": "^3.22.4",
-    "crypto-js": "^4.2.0",
-    "lru-cache": "^10.1.0",
-    "pdf-parse": "^1.1.1",
-    "sharp": "^0.33.2",
-    "uuid": "^9.0.0"
-  },
-  "devDependencies": {
-    "@types/cors": "^2.8.17",
-    "@types/express": "^4.17.21",
-    "@types/crypto-js": "^4.2.1",
-    "@types/node": "^20.10.0",
-    "@types/uuid": "^9.0.7",
-    "tsx": "^4.7.0",
-    "typescript": "^5.3.2"
+    "batch:embed": "tsx scripts/batch/embed-chunks.ts",
+    "batch:entities": "tsx scripts/batch/extract-entities.ts",
+    "batch:classify": "tsx scripts/batch/classify-docs.ts",
+    "batch:redactions": "tsx scripts/batch/detect-redactions.ts",
+    "batch:timeline": "tsx scripts/batch/extract-timeline.ts",
+    "batch:summarize": "tsx scripts/batch/generate-summaries.ts",
+    "batch:criminal": "tsx scripts/batch/score-criminal.ts",
+    "batch:media": "tsx scripts/batch/process-media.ts",
+    "batch:all": "tsx scripts/batch/run-all.ts"
   }
 }
 ```
 
-File: `worker/tsconfig.json`
-
-```json
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ES2022"],
-    "outDir": "dist",
-    "rootDir": "src",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "paths": {
-      "@worker/*": ["./src/*"],
-      "@/lib/*": ["../lib/*"],
-      "@/types/*": ["../types/*"]
-    }
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
-}
-```
-
-File: `worker/.env.example`
+The batch scripts use the same `.env.local` as the main Next.js app. Key env vars:
 
 ```bash
-# worker/.env.example
+# .env.local (add to existing)
 
-# --- Supabase (service role — full access) ---
-SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+# --- Supabase (service role — full access for batch scripts) ---
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
-
-# --- Redis (optional — falls back to polling if not set) ---
-REDIS_URL=redis://localhost:6379
 
 # --- AI Providers ---
 GOOGLE_AI_API_KEY=
-OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
 COHERE_API_KEY=
 
-# --- Worker Config ---
-WORKER_PORT=3001
-WORKER_CONCURRENCY=2
-PIPELINE_MAX_RETRIES=3
-PIPELINE_RETRY_DELAY_MS=5000
+# --- Batch Config ---
+BATCH_CONCURRENCY=5
+BATCH_MAX_RETRIES=3
+BATCH_RETRY_DELAY_MS=5000
 
 # --- Rate Limits (requests per minute) ---
 RATE_LIMIT_GOOGLE=300
-RATE_LIMIT_OPENAI=60
 RATE_LIMIT_COHERE=100
 
 # --- Embedding Config (Amazon Nova Multimodal — unified 1024d for text/image/video/audio) ---
@@ -140,23 +84,14 @@ AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=your-access-key
 AWS_SECRET_ACCESS_KEY=your-secret-key
 EMBEDDING_BATCH_SIZE=100
-
-# --- Chat Config ---
-CHAT_MODEL=gemini-2.0-flash
-CHAT_MAX_TOOL_ITERATIONS=5
-CHAT_MAX_CONTEXT_TOKENS=100000
-```
-
-```bash
-cd worker && pnpm install
 ```
 
 ### Step 2: Create pipeline stage definitions
 
-File: `worker/src/pipeline/stages.ts`
+File: `lib/pipeline/stages.ts`
 
 ```typescript
-// worker/src/pipeline/stages.ts
+// lib/pipeline/stages.ts
 // Defines all pipeline stages, their ordering, and dependencies.
 
 export enum PipelineStage {
@@ -366,359 +301,159 @@ export function stageToStatus(stage: PipelineStage): ProcessingStatus {
 }
 ```
 
-### Step 3: Create the job queue
+### Step 3: Create the batch runner
 
-File: `worker/src/pipeline/job-queue.ts`
+File: `lib/pipeline/batch-runner.ts`
 
 ```typescript
-// worker/src/pipeline/job-queue.ts
-// Job queue with BullMQ (Redis) primary and polling-based fallback.
+// lib/pipeline/batch-runner.ts
+// Queries Supabase for documents needing processing, runs them through
+// pipeline stages in batches with concurrency control and progress tracking.
+// No Redis, no polling, no persistent server — just a script that runs to completion.
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
-import { z } from 'zod'
 
-// --- Job type definitions ---
-
-export const JobTypeSchema = z.enum([
-  'process_document',
-  'process_image',
-  'process_video',
-  'process_audio',
-  'process_hint',
-  'run_cascade',
-  'merge_entities',
-  'detect_patterns',
-])
-
-export type JobType = z.infer<typeof JobTypeSchema>
-
-export interface Job {
-  id: string
-  documentId: string | null
-  jobType: JobType
-  status: 'pending' | 'processing' | 'complete' | 'failed'
-  priority: number
-  attempts: number
-  maxAttempts: number
-  errorMessage: string | null
-  startedAt: Date | null
-  completedAt: Date | null
-  createdAt: Date
-}
-
-export interface JobQueueConfig {
-  redisUrl?: string
+export interface BatchRunnerConfig {
   supabaseUrl: string
   supabaseServiceKey: string
   concurrency: number
-  pollIntervalMs: number
+  maxRetries: number
+  retryDelayMs: number
+  /** If set, only process documents matching this filter */
+  datasetId?: string
+  /** If set, only process this many documents (for testing) */
+  limit?: number
+  /** If true, do a dry run — log what would be processed but don't actually process */
+  dryRun?: boolean
 }
 
-// --- Polling-based queue (no Redis required) ---
-
-export class PollingJobQueue {
-  private supabase: SupabaseClient
-  private concurrency: number
-  private pollIntervalMs: number
-  private activeJobs: number = 0
-  private pollTimer: ReturnType<typeof setInterval> | null = null
-  private handler: ((job: Job) => Promise<void>) | null = null
-  private isShuttingDown = false
-
-  constructor(config: JobQueueConfig) {
-    this.supabase = createClient(config.supabaseUrl, config.supabaseServiceKey)
-    this.concurrency = config.concurrency
-    this.pollIntervalMs = config.pollIntervalMs
-  }
-
-  /** Register a handler function for processing jobs */
-  onJob(handler: (job: Job) => Promise<void>): void {
-    this.handler = handler
-  }
-
-  /** Start polling for new jobs */
-  start(): void {
-    if (this.pollTimer) return
-    console.log(
-      `[JobQueue] Starting polling (interval=${this.pollIntervalMs}ms, concurrency=${this.concurrency})`
-    )
-    this.pollTimer = setInterval(() => this.poll(), this.pollIntervalMs)
-    // Run immediately on start
-    this.poll()
-  }
-
-  /** Stop polling and wait for active jobs to finish */
-  async stop(): Promise<void> {
-    this.isShuttingDown = true
-    if (this.pollTimer) {
-      clearInterval(this.pollTimer)
-      this.pollTimer = null
-    }
-    // Wait for active jobs to complete (max 30s)
-    const start = Date.now()
-    while (this.activeJobs > 0 && Date.now() - start < 30_000) {
-      await new Promise((r) => setTimeout(r, 500))
-    }
-    console.log('[JobQueue] Stopped')
-  }
-
-  /** Enqueue a new job */
-  async enqueue(
-    jobType: JobType,
-    documentId: string | null,
-    priority: number = 0
-  ): Promise<string> {
-    const { data, error } = await this.supabase
-      .from('processing_jobs')
-      .insert({
-        document_id: documentId,
-        job_type: jobType,
-        status: 'pending',
-        priority,
-        attempts: 0,
-        max_attempts: 3,
-      })
-      .select('id')
-      .single()
-
-    if (error) throw new Error(`Failed to enqueue job: ${error.message}`)
-    return data.id
-  }
-
-  /** Poll for pending jobs, claim one, and process it */
-  private async poll(): Promise<void> {
-    if (this.isShuttingDown) return
-    if (this.activeJobs >= this.concurrency) return
-    if (!this.handler) return
-
-    try {
-      // Claim the highest-priority pending job atomically
-      const { data: job, error } = await this.supabase
-        .rpc('claim_next_job', { worker_id: process.pid.toString() })
-
-      if (error) {
-        // RPC may not exist yet — fall back to simple select+update
-        await this.pollFallback()
-        return
-      }
-
-      if (!job) return // No pending jobs
-
-      this.activeJobs++
-
-      const mappedJob: Job = {
-        id: job.id,
-        documentId: job.document_id,
-        jobType: job.job_type as JobType,
-        status: 'processing',
-        priority: job.priority,
-        attempts: job.attempts,
-        maxAttempts: job.max_attempts,
-        errorMessage: null,
-        startedAt: new Date(),
-        completedAt: null,
-        createdAt: new Date(job.created_at),
-      }
-
-      try {
-        await this.handler(mappedJob)
-        await this.markComplete(mappedJob.id)
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err)
-        await this.markFailed(
-          mappedJob.id,
-          errorMsg,
-          mappedJob.attempts + 1,
-          mappedJob.maxAttempts
-        )
-      } finally {
-        this.activeJobs--
-      }
-    } catch (err) {
-      console.error('[JobQueue] Poll error:', err)
-    }
-  }
-
-  /** Fallback polling without the claim_next_job RPC */
-  private async pollFallback(): Promise<void> {
-    const { data: jobs, error } = await this.supabase
-      .from('processing_jobs')
-      .select('*')
-      .eq('status', 'pending')
-      .order('priority', { ascending: false })
-      .order('created_at', { ascending: true })
-      .limit(1)
-
-    if (error || !jobs || jobs.length === 0) return
-
-    const job = jobs[0]
-
-    // Try to claim it (optimistic — may race with another worker)
-    const { error: updateError } = await this.supabase
-      .from('processing_jobs')
-      .update({
-        status: 'processing',
-        started_at: new Date().toISOString(),
-        attempts: job.attempts + 1,
-      })
-      .eq('id', job.id)
-      .eq('status', 'pending') // Only update if still pending (poor-man's CAS)
-
-    if (updateError) return
-
-    this.activeJobs++
-
-    const mappedJob: Job = {
-      id: job.id,
-      documentId: job.document_id,
-      jobType: job.job_type as JobType,
-      status: 'processing',
-      priority: job.priority,
-      attempts: job.attempts + 1,
-      maxAttempts: job.max_attempts,
-      errorMessage: null,
-      startedAt: new Date(),
-      completedAt: null,
-      createdAt: new Date(job.created_at),
-    }
-
-    try {
-      if (this.handler) await this.handler(mappedJob)
-      await this.markComplete(mappedJob.id)
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err)
-      await this.markFailed(mappedJob.id, errorMsg, mappedJob.attempts, mappedJob.maxAttempts)
-    } finally {
-      this.activeJobs--
-    }
-  }
-
-  private async markComplete(jobId: string): Promise<void> {
-    await this.supabase
-      .from('processing_jobs')
-      .update({ status: 'complete', completed_at: new Date().toISOString() })
-      .eq('id', jobId)
-  }
-
-  private async markFailed(
-    jobId: string,
-    errorMessage: string,
-    attempts: number,
-    maxAttempts: number
-  ): Promise<void> {
-    const shouldRetry = attempts < maxAttempts
-    await this.supabase
-      .from('processing_jobs')
-      .update({
-        status: shouldRetry ? 'pending' : 'failed',
-        error_message: errorMessage,
-        completed_at: shouldRetry ? null : new Date().toISOString(),
-      })
-      .eq('id', jobId)
-  }
-}
-
-// --- BullMQ-based queue (requires Redis) ---
-
-export class BullMQJobQueue {
-  private redisUrl: string
-  private supabase: SupabaseClient
-  private worker: any = null
-  private queue: any = null
-
-  constructor(config: JobQueueConfig) {
-    if (!config.redisUrl) throw new Error('BullMQ requires REDIS_URL')
-    this.redisUrl = config.redisUrl
-    this.supabase = createClient(config.supabaseUrl, config.supabaseServiceKey)
-  }
-
-  async initialize(): Promise<void> {
-    const { Queue } = await import('bullmq')
-    const IORedis = (await import('ioredis')).default
-    const connection = new IORedis(this.redisUrl, { maxRetriesPerRequest: null })
-    this.queue = new Queue('document-pipeline', { connection })
-    console.log('[JobQueue] BullMQ initialized with Redis')
-  }
-
-  onJob(handler: (job: Job) => Promise<void>): void {
-    ;(this as any)._handler = handler
-  }
-
-  async start(): Promise<void> {
-    const { Worker } = await import('bullmq')
-    const IORedis = (await import('ioredis')).default
-    const connection = new IORedis(this.redisUrl, { maxRetriesPerRequest: null })
-
-    this.worker = new Worker(
-      'document-pipeline',
-      async (bullJob) => {
-        const handler = (this as any)._handler
-        if (!handler) return
-
-        const job: Job = {
-          id: bullJob.id || '',
-          documentId: bullJob.data.documentId,
-          jobType: bullJob.data.jobType,
-          status: 'processing',
-          priority: bullJob.opts.priority || 0,
-          attempts: bullJob.attemptsMade,
-          maxAttempts: 3,
-          errorMessage: null,
-          startedAt: new Date(),
-          completedAt: null,
-          createdAt: new Date(),
-        }
-
-        await handler(job)
-      },
-      { connection, concurrency: 2 }
-    )
-
-    console.log('[JobQueue] BullMQ worker started')
-  }
-
-  async stop(): Promise<void> {
-    if (this.worker) await this.worker.close()
-    if (this.queue) await this.queue.close()
-  }
-
-  async enqueue(
-    jobType: JobType,
-    documentId: string | null,
-    priority: number = 0
-  ): Promise<string> {
-    if (!this.queue) throw new Error('Queue not initialized')
-    const bullJob = await this.queue.add(
-      jobType,
-      { jobType, documentId },
-      { priority, attempts: 3, backoff: { type: 'exponential', delay: 5000 } }
-    )
-    return bullJob.id || ''
-  }
+export interface BatchResult {
+  processed: number
+  skipped: number
+  failed: number
+  errors: Array<{ documentId: string; error: string }>
+  durationMs: number
 }
 
 /**
- * Factory: create the appropriate queue based on config.
- * Returns PollingJobQueue if no Redis URL, BullMQJobQueue otherwise.
+ * Generic batch runner that queries for documents needing a specific stage,
+ * then processes them with the provided handler function.
  */
-export async function createJobQueue(
-  config: JobQueueConfig
-): Promise<PollingJobQueue | BullMQJobQueue> {
-  if (config.redisUrl) {
-    const queue = new BullMQJobQueue(config)
-    await queue.initialize()
-    return queue
+export async function runBatch(
+  config: BatchRunnerConfig,
+  stageName: string,
+  /**
+   * Filter query: given a Supabase query builder, add .eq/.is/.not filters
+   * to select only documents that need this stage. Return the filtered query.
+   */
+  needsProcessing: (
+    query: ReturnType<SupabaseClient['from']>
+  ) => ReturnType<SupabaseClient['from']>,
+  /** Process a single document. Receives document ID and Supabase client. */
+  handler: (documentId: string, supabase: SupabaseClient) => Promise<void>
+): Promise<BatchResult> {
+  const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey)
+  const start = Date.now()
+  const result: BatchResult = { processed: 0, skipped: 0, failed: 0, errors: [], durationMs: 0 }
+
+  // Query for documents needing this stage
+  let query = supabase.from('documents').select('id')
+  query = needsProcessing(query)
+  if (config.datasetId) {
+    query = query.eq('dataset_id', config.datasetId)
   }
-  return new PollingJobQueue(config)
+  if (config.limit) {
+    query = query.limit(config.limit)
+  }
+
+  const { data: docs, error } = await query
+  if (error) throw new Error(`Failed to query documents: ${error.message}`)
+  if (!docs || docs.length === 0) {
+    console.log(`[${stageName}] No documents need processing`)
+    result.durationMs = Date.now() - start
+    return result
+  }
+
+  console.log(`[${stageName}] Found ${docs.length} documents to process (concurrency=${config.concurrency})`)
+
+  if (config.dryRun) {
+    console.log(`[${stageName}] Dry run — skipping actual processing`)
+    result.skipped = docs.length
+    result.durationMs = Date.now() - start
+    return result
+  }
+
+  // Process in batches with concurrency control
+  const docIds = docs.map((d: { id: string }) => d.id)
+  for (let i = 0; i < docIds.length; i += config.concurrency) {
+    const batch = docIds.slice(i, i + config.concurrency)
+    const promises = batch.map(async (docId: string) => {
+      let attempts = 0
+      while (attempts < config.maxRetries) {
+        try {
+          await handler(docId, supabase)
+          result.processed++
+          return
+        } catch (err) {
+          attempts++
+          const msg = err instanceof Error ? err.message : String(err)
+          if (attempts < config.maxRetries) {
+            console.warn(`[${stageName}] Retry ${attempts}/${config.maxRetries} for ${docId}: ${msg}`)
+            await new Promise((r) => setTimeout(r, config.retryDelayMs * attempts))
+          } else {
+            console.error(`[${stageName}] Failed after ${config.maxRetries} attempts: ${docId}`)
+            result.failed++
+            result.errors.push({ documentId: docId, error: msg })
+          }
+        }
+      }
+    })
+
+    await Promise.all(promises)
+
+    // Progress log every batch
+    const total = result.processed + result.failed
+    if (total % 100 === 0 || i + config.concurrency >= docIds.length) {
+      console.log(`[${stageName}] Progress: ${total}/${docIds.length} (${result.failed} failed)`)
+    }
+  }
+
+  result.durationMs = Date.now() - start
+  console.log(
+    `[${stageName}] Complete: ${result.processed} processed, ${result.failed} failed in ${(result.durationMs / 1000).toFixed(1)}s`
+  )
+
+  return result
+}
+
+/** Create a Supabase admin client from environment variables */
+export function createAdminClient(): SupabaseClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
+  }
+  return createClient(url, key)
+}
+
+/** Default batch config from environment variables */
+export function getDefaultConfig(): BatchRunnerConfig {
+  return {
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '',
+    supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    concurrency: parseInt(process.env.BATCH_CONCURRENCY || '5', 10),
+    maxRetries: parseInt(process.env.BATCH_MAX_RETRIES || '3', 10),
+    retryDelayMs: parseInt(process.env.BATCH_RETRY_DELAY_MS || '5000', 10),
+  }
 }
 ```
 
 ### Step 4: Create the pipeline orchestrator
 
-File: `worker/src/pipeline/orchestrator.ts`
+File: `lib/pipeline/orchestrator.ts`
 
 ```typescript
-// worker/src/pipeline/orchestrator.ts
+// lib/pipeline/orchestrator.ts
 // Runs a document through all pipeline stages sequentially.
 // Each stage is a function that takes a document ID and returns void.
 // The orchestrator handles retries, status updates, and error reporting.
@@ -931,42 +666,50 @@ export class PipelineOrchestrator {
 }
 ```
 
-### Step 5: Create the worker entry point
+### Step 5: Create the batch CLI entry point
 
-File: `worker/src/index.ts`
+File: `scripts/batch/run-all.ts`
 
 ```typescript
-// worker/src/index.ts
-// Main entry point for the worker process.
-// Sets up Express server (for chat API), job queue, and pipeline.
+// scripts/batch/run-all.ts
+// Master batch script that runs all pipeline stages in order.
+// Usage: npx tsx scripts/batch/run-all.ts [--dataset-id <uuid>] [--limit N] [--dry-run] [--stage embed]
+//
+// Runs to completion and exits. No persistent server, no polling.
 
 import 'dotenv/config'
-import express from 'express'
-import cors from 'cors'
 import { createClient } from '@supabase/supabase-js'
-import { createJobQueue, type Job } from './pipeline/job-queue.js'
-import { PipelineOrchestrator } from './pipeline/orchestrator.js'
-import { PipelineStage } from './pipeline/stages.js'
+import { PipelineOrchestrator } from '../../lib/pipeline/orchestrator.js'
+import { PipelineStage } from '../../lib/pipeline/stages.js'
+import { getDefaultConfig } from '../../lib/pipeline/batch-runner.js'
 
 // --- Import stage handlers ---
-import { handleOCR } from './services/document-ai-ocr.js'
-import { handleClassify } from './services/classifier.js'
-import { handleChunk } from './services/smart-chunker.js'
-import { handleContextualHeaders } from './services/contextual-header-gen.js'
-import { handleEmbed } from './services/embedding-service.js'
-import { handleVisualEmbed } from './services/visual-embedding-service.js'
-import { handleEntityExtract } from './services/entity-extractor.js'
-import { handleRelationshipMap } from './services/relationship-mapper.js'
-import { handleRedactionDetect } from './services/redaction-detector.js'
-import { handleTimelineExtract } from './services/timeline-extractor.js'
-import { handleSummarize } from './services/document-summarizer.js'
-import { handleCriminalIndicators } from './services/criminal-indicator-scorer.js'
+import { handleOCR } from '../../lib/pipeline/services/document-ai-ocr.js'
+import { handleClassify } from '../../lib/pipeline/services/classifier.js'
+import { handleChunk } from '../../lib/pipeline/services/smart-chunker.js'
+import { handleContextualHeaders } from '../../lib/pipeline/services/contextual-header-gen.js'
+import { handleEmbed } from '../../lib/pipeline/services/embedding-service.js'
+import { handleVisualEmbed } from '../../lib/pipeline/services/visual-embedding-service.js'
+import { handleEntityExtract } from '../../lib/pipeline/services/entity-extractor.js'
+import { handleRelationshipMap } from '../../lib/pipeline/services/relationship-mapper.js'
+import { handleRedactionDetect } from '../../lib/pipeline/services/redaction-detector.js'
+import { handleTimelineExtract } from '../../lib/pipeline/services/timeline-extractor.js'
+import { handleSummarize } from '../../lib/pipeline/services/document-summarizer.js'
+import { handleCriminalIndicators } from '../../lib/pipeline/services/criminal-indicator-scorer.js'
 
-// --- Import API routes ---
-import { createChatRouter } from './api/chat.js'
+// --- Parse CLI args ---
+const args = process.argv.slice(2)
+const datasetIdIdx = args.indexOf('--dataset-id')
+const limitIdx = args.indexOf('--limit')
+const stageIdx = args.indexOf('--stage')
+const dryRun = args.includes('--dry-run')
+
+const datasetId = datasetIdIdx !== -1 ? args[datasetIdIdx + 1] : undefined
+const limit = limitIdx !== -1 ? parseInt(args[limitIdx + 1], 10) : undefined
+const stageFilter = stageIdx !== -1 ? args[stageIdx + 1] : undefined
 
 // --- Environment validation ---
-const REQUIRED_ENV = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']
+const REQUIRED_ENV = ['NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']
 for (const key of REQUIRED_ENV) {
   if (!process.env[key]) {
     console.error(`Missing required env var: ${key}`)
@@ -974,38 +717,24 @@ for (const key of REQUIRED_ENV) {
   }
 }
 
-const PORT = parseInt(process.env.WORKER_PORT || '3001', 10)
-const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY || '2', 10)
-
 async function main() {
-  // --- Supabase client (service role) ---
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const config = getDefaultConfig()
+  const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey)
 
-  // --- Express server ---
-  const app = express()
-  app.use(cors())
-  app.use(express.json({ limit: '10mb' }))
-
-  // Health check
-  app.get('/health', (_req, res) => {
-    res.json({
-      status: 'ok',
-      uptime: process.uptime(),
-      timestamp: new Date().toISOString(),
-      activeJobs: 0,
-    })
-  })
-
-  // Chat API
-  app.use('/chat', createChatRouter(supabase))
+  console.log('[Batch] Starting pipeline processing')
+  console.log(`[Batch] Concurrency: ${config.concurrency}`)
+  if (datasetId) console.log(`[Batch] Dataset filter: ${datasetId}`)
+  if (limit) console.log(`[Batch] Limit: ${limit} documents`)
+  if (stageFilter) console.log(`[Batch] Stage filter: ${stageFilter}`)
+  if (dryRun) console.log(`[Batch] DRY RUN — no actual processing`)
 
   // --- Pipeline orchestrator ---
   const pipeline = new PipelineOrchestrator(supabase, {
-    maxRetries: parseInt(process.env.PIPELINE_MAX_RETRIES || '3', 10),
-    retryDelayMs: parseInt(process.env.PIPELINE_RETRY_DELAY_MS || '5000', 10),
+    maxRetries: config.maxRetries,
+    retryDelayMs: config.retryDelayMs,
+    stagesFilter: stageFilter
+      ? [stageFilter as PipelineStage]
+      : undefined,
   })
 
   // Register all stage handlers
@@ -1022,7 +751,7 @@ async function main() {
   pipeline.registerStage(PipelineStage.SUMMARIZE, handleSummarize)
   pipeline.registerStage(PipelineStage.CRIMINAL_INDICATORS, handleCriminalIndicators)
 
-  // --- Skip check registrations (belt-and-suspenders with per-handler checks) ---
+  // --- Skip check registrations ---
   pipeline.registerSkipCheck(PipelineStage.OCR, async (docId, supabase) => {
     const { data } = await supabase.from('documents')
       .select('ocr_text').eq('id', docId).single()
@@ -1044,91 +773,57 @@ async function main() {
     return (count ?? 0) > 0
   })
 
-  // --- Job queue ---
-  const jobQueue = await createJobQueue({
-    redisUrl: process.env.REDIS_URL,
-    supabaseUrl: process.env.SUPABASE_URL!,
-    supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    concurrency: CONCURRENCY,
-    pollIntervalMs: 5000,
-  })
+  // --- Query for documents needing processing ---
+  let query = supabase.from('documents').select('id')
+    .not('processing_status', 'eq', 'complete')
+  if (datasetId) query = query.eq('dataset_id', datasetId)
+  if (limit) query = query.limit(limit)
 
-  jobQueue.onJob(async (job: Job) => {
-    console.log(`[Worker] Processing job ${job.id} (type=${job.jobType}, doc=${job.documentId})`)
-
-    switch (job.jobType) {
-      case 'process_document':
-        if (!job.documentId) throw new Error('process_document requires documentId')
-        await pipeline.processDocument(job.documentId)
-        break
-
-      case 'process_image':
-        if (!job.documentId) throw new Error('process_image requires documentId')
-        await handleVisualEmbed(job.documentId, supabase)
-        break
-
-      case 'process_video':
-        console.log(`[Worker] Video processing for ${job.documentId}`)
-        break
-
-      case 'process_audio':
-        console.log(`[Worker] Audio processing for ${job.documentId}`)
-        break
-
-      case 'process_hint':
-        console.log(`[Worker] Hint processing for ${job.documentId}`)
-        break
-
-      case 'run_cascade':
-        console.log(`[Worker] Cascade processing`)
-        break
-
-      case 'merge_entities':
-        console.log(`[Worker] Entity merge detection`)
-        break
-
-      case 'detect_patterns':
-        console.log(`[Worker] Pattern detection`)
-        break
-
-      default:
-        console.warn(`[Worker] Unknown job type: ${job.jobType}`)
-    }
-  })
-
-  jobQueue.start()
-
-  // --- Graceful shutdown ---
-  const shutdown = async () => {
-    console.log('[Worker] Shutting down...')
-    await jobQueue.stop()
-    process.exit(0)
+  const { data: docs, error } = await query
+  if (error) throw new Error(`Failed to query documents: ${error.message}`)
+  if (!docs || docs.length === 0) {
+    console.log('[Batch] No documents need processing. Done.')
+    return
   }
-  process.on('SIGINT', shutdown)
-  process.on('SIGTERM', shutdown)
 
-  // --- Start Express ---
-  app.listen(PORT, () => {
-    console.log(`[Worker] Express server listening on port ${PORT}`)
-    console.log(`[Worker] Health check: http://localhost:${PORT}/health`)
-    console.log(`[Worker] Chat API:    POST http://localhost:${PORT}/chat`)
-    console.log(`[Worker] Concurrency: ${CONCURRENCY}`)
-    console.log(`[Worker] Redis:       ${process.env.REDIS_URL ? 'BullMQ' : 'Polling fallback'}`)
-  })
+  console.log(`[Batch] Processing ${docs.length} documents...`)
+
+  if (dryRun) {
+    console.log('[Batch] Dry run complete. Would process the above documents.')
+    return
+  }
+
+  // Process documents with concurrency control
+  let processed = 0, failed = 0
+  for (let i = 0; i < docs.length; i += config.concurrency) {
+    const batch = docs.slice(i, i + config.concurrency)
+    const results = await Promise.allSettled(
+      batch.map((doc: { id: string }) => pipeline.processDocument(doc.id))
+    )
+
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value.success) processed++
+      else failed++
+    }
+
+    console.log(`[Batch] Progress: ${processed + failed}/${docs.length} (${failed} failed)`)
+  }
+
+  console.log(`\n[Batch] Complete: ${processed} processed, ${failed} failed`)
 }
 
 main().catch((err) => {
-  console.error('[Worker] Fatal error:', err)
+  console.error('[Batch] Fatal error:', err)
   process.exit(1)
 })
 ```
 
 ### Step 6: Build Stage 1 — OCR service
 
-File: `worker/src/services/document-ai-ocr.ts`
+File: `lib/pipeline/services/document-ai-ocr.ts`
 
 ```typescript
-// worker/src/services/document-ai-ocr.ts
+// lib/pipeline/services/document-ai-ocr.ts
 // Stage 1: OCR — Extract text from PDF/image documents.
 // Uses Gemini Vision for OCR (simpler than Document AI, supports all formats).
 
@@ -1298,10 +993,10 @@ export async function handleOCR(
 
 ### Step 7: Build Stage 2 — Document classifier
 
-File: `worker/src/services/classifier.ts`
+File: `lib/pipeline/services/classifier.ts`
 
 ```typescript
-// worker/src/services/classifier.ts
+// lib/pipeline/services/classifier.ts
 // Stage 2: Classification — Classify documents into one of 16 types.
 // Uses Gemini Flash with structured JSON output.
 
@@ -1454,10 +1149,10 @@ export async function handleClassify(
 
 ### Step 8: Build Stage 3 — Smart chunker
 
-File: `worker/src/services/smart-chunker.ts`
+File: `lib/pipeline/services/smart-chunker.ts`
 
 ```typescript
-// worker/src/services/smart-chunker.ts
+// lib/pipeline/services/smart-chunker.ts
 // Stage 3: Structure-aware chunking.
 // Splits OCR text into 800-1500 char chunks respecting heading/section boundaries.
 // No API calls — pure text processing.
@@ -1745,8 +1440,8 @@ export async function handleChunk(
   if (!doc.ocr_text) throw new Error(`Document ${documentId} has no OCR text`)
 
   // Use advisory lock to prevent TOCTOU race condition:
-  // Without this, Worker A could check embeddings (0), Worker B starts embedding,
-  // then Worker A deletes all chunks including the ones Worker B just embedded.
+  // Without this, Script A could check embeddings (0), Script B starts embedding,
+  // then Script A deletes all chunks including the ones Script B just embedded.
   return withDocumentLock(documentId, supabase, async () => {
 
   // Check if chunks with pre-computed embeddings exist (community data).
@@ -1804,10 +1499,10 @@ export async function handleChunk(
 
 ### Step 9: Build Stage 4 — Contextual header generator
 
-File: `worker/src/services/contextual-header-gen.ts`
+File: `lib/pipeline/services/contextual-header-gen.ts`
 
 ```typescript
-// worker/src/services/contextual-header-gen.ts
+// lib/pipeline/services/contextual-header-gen.ts
 // Stage 4: Contextual Headers — Generate a 50-100 token context header per chunk.
 // The header situates each chunk within the whole document, improving embedding quality
 // and search relevance (Anthropic's "Contextual Retrieval" technique).
@@ -1950,10 +1645,10 @@ export async function handleContextualHeaders(
 
 ### Step 10: Build Stage 5 — Embedding service and cache
 
-File: `worker/src/services/embedding-cache.ts`
+File: `lib/pipeline/services/embedding-cache.ts`
 
 ```typescript
-// worker/src/services/embedding-cache.ts
+// lib/pipeline/services/embedding-cache.ts
 // Two-tier embedding cache: L1 in-memory LRU + L2 Supabase lookup.
 // Wraps any embedding call to avoid re-computing embeddings for identical text.
 
@@ -2034,10 +1729,10 @@ export class EmbeddingCache {
 }
 ```
 
-File: `worker/src/services/embedding-service.ts`
+File: `lib/pipeline/services/embedding-service.ts`
 
 ```typescript
-// worker/src/services/embedding-service.ts
+// lib/pipeline/services/embedding-service.ts
 // Stage 5: Embedding — Generate 1024d Nova embeddings for all chunks.
 // Uses Amazon Nova Multimodal Embeddings v1 via AWS Bedrock.
 // Same model handles text, images, video, and audio in a unified 1024d space.
@@ -2184,10 +1879,10 @@ export async function handleEmbed(
 
 ### Step 11: Build visual embedding service
 
-File: `worker/src/services/visual-embedding-service.ts`
+File: `lib/pipeline/services/visual-embedding-service.ts`
 
 ```typescript
-// worker/src/services/visual-embedding-service.ts
+// lib/pipeline/services/visual-embedding-service.ts
 // Generates visual embeddings for images using Amazon Nova Multimodal Embeddings.
 // Nova embeds the raw image pixels directly into the same 1024d space as text —
 // no intermediate description step needed for search. Descriptions are still
@@ -2314,10 +2009,10 @@ export async function handleVisualEmbed(
 
 ### Step 12: Build Stage 6 — Entity extractor
 
-File: `worker/src/services/entity-extractor.ts`
+File: `lib/pipeline/services/entity-extractor.ts`
 
 ```typescript
-// worker/src/services/entity-extractor.ts
+// lib/pipeline/services/entity-extractor.ts
 // Stage 6: Entity Extraction — Extract named entities from document chunks.
 // Uses Gemini Flash with structured JSON output.
 // Deduplicates against existing entities by name matching.
@@ -2580,10 +2275,10 @@ export async function handleEntityExtract(
 
 ### Step 13: Build Stage 7 — Relationship mapper
 
-File: `worker/src/services/relationship-mapper.ts`
+File: `lib/pipeline/services/relationship-mapper.ts`
 
 ```typescript
-// worker/src/services/relationship-mapper.ts
+// lib/pipeline/services/relationship-mapper.ts
 // Stage 7: Relationship Mapping — Identify entity-to-entity relationships.
 // Uses Gemini Flash to analyze chunks where multiple entities co-occur.
 
@@ -2766,10 +2461,10 @@ export async function handleRelationshipMap(
 
 ### Step 14: Build Stage 8 — Redaction detector
 
-File: `worker/src/services/redaction-detector.ts`
+File: `lib/pipeline/services/redaction-detector.ts`
 
 ```typescript
-// worker/src/services/redaction-detector.ts
+// lib/pipeline/services/redaction-detector.ts
 // Stage 8: Redaction Detection — Detect and catalog redacted regions.
 // Finds [REDACTED] markers in OCR text, extracts surrounding context,
 // and generates embeddings for similarity matching.
@@ -2957,10 +2652,10 @@ export async function handleRedactionDetect(
 
 ### Step 15: Build Stage 9 — Timeline extractor
 
-File: `worker/src/services/timeline-extractor.ts`
+File: `lib/pipeline/services/timeline-extractor.ts`
 
 ```typescript
-// worker/src/services/timeline-extractor.ts
+// lib/pipeline/services/timeline-extractor.ts
 // Stage 9: Timeline Extraction — Extract dated events from document chunks.
 // Creates timeline_events records linked to entities and source documents.
 
@@ -3110,10 +2805,10 @@ export async function handleTimelineExtract(
 
 ### Step 16: Build Stage 10 — Document summarizer
 
-File: `worker/src/services/document-summarizer.ts`
+File: `lib/pipeline/services/document-summarizer.ts`
 
 ```typescript
-// worker/src/services/document-summarizer.ts
+// lib/pipeline/services/document-summarizer.ts
 // Stage 10: Document Summary — Generate executive summary per document.
 // Runs after entity extraction for maximum context.
 
@@ -3265,10 +2960,10 @@ export async function handleSummarize(
 
 ### Step 17: Build Stage 11 — Criminal indicator scorer
 
-File: `worker/src/services/criminal-indicator-scorer.ts`
+File: `lib/pipeline/services/criminal-indicator-scorer.ts`
 
 ```typescript
-// worker/src/services/criminal-indicator-scorer.ts
+// lib/pipeline/services/criminal-indicator-scorer.ts
 // Stage 11: Criminal Indicator Scoring — Flag evidence of crimes.
 // CRITICAL ETHICAL NOTE: Flags patterns for human review — never makes accusations.
 
@@ -3425,10 +3120,10 @@ export async function handleCriminalIndicators(
 
 ### Step 18: Build the cascade engine
 
-File: `worker/src/services/cascade-engine.ts`
+File: `lib/pipeline/services/cascade-engine.ts`
 
 ```typescript
-// worker/src/services/cascade-engine.ts
+// lib/pipeline/services/cascade-engine.ts
 // When a redaction is solved, find similar unsolved redactions and auto-propose.
 // Matching criteria: context similarity > 0.80, char length +/-3, same redaction type.
 
@@ -3540,10 +3235,10 @@ export async function runCascade(
 
 ### Step 19: Build the audio processor
 
-File: `worker/src/services/audio-processor.ts`
+File: `lib/pipeline/services/audio-processor.ts`
 
 ```typescript
-// worker/src/services/audio-processor.ts
+// lib/pipeline/services/audio-processor.ts
 // Process audio files: transcribe, chunk, embed, extract entities.
 // Uses Whisper (via OpenAI API) for transcription.
 
@@ -3646,10 +3341,10 @@ export async function handleAudioProcess(
 
 ### Step 20: Build the structured data extractor
 
-File: `worker/src/services/structured-extractor.ts`
+File: `lib/pipeline/services/structured-extractor.ts`
 
 ```typescript
-// worker/src/services/structured-extractor.ts
+// lib/pipeline/services/structured-extractor.ts
 // Extract structured records from semi-structured documents.
 // Handles: flight manifests, financial records, phone records, address books.
 
@@ -3826,10 +3521,10 @@ export async function handleStructuredExtraction(
 
 ### Step 21: Build the video transcriber
 
-File: `worker/src/services/video-transcriber.ts`
+File: `lib/pipeline/services/video-transcriber.ts`
 
 ```typescript
-// worker/src/services/video-transcriber.ts
+// lib/pipeline/services/video-transcriber.ts
 // Transcribe video files and create video_chunks records.
 // Uses Whisper via OpenAI API for transcription.
 
@@ -3930,10 +3625,10 @@ export async function handleVideoTranscribe(
 
 ### Step 22: Build the chat orchestrator and API
 
-File: `worker/src/chatbot/chat-orchestrator.ts`
+File: `lib/chat/chat-orchestrator.ts`
 
 ```typescript
-// worker/src/chatbot/chat-orchestrator.ts
+// lib/chat/chat-orchestrator.ts
 // Agentic tool-calling loop for the research assistant chatbot.
 // Receives user message + history, calls tools iteratively, returns response with citations.
 
@@ -4134,10 +3829,10 @@ export class ChatOrchestrator {
 }
 ```
 
-File: `worker/src/chatbot/tools/search-documents.ts`
+File: `lib/chat/tools/search-documents.ts`
 
 ```typescript
-// worker/src/chatbot/tools/search-documents.ts
+// lib/chat/tools/search-documents.ts
 import { SupabaseClient } from '@supabase/supabase-js'
 import type { ChatTool } from '../chat-orchestrator.js'
 
@@ -4194,10 +3889,10 @@ ${r.content.slice(0, 500)}
 }
 ```
 
-File: `worker/src/chatbot/tools/lookup-entity.ts`
+File: `lib/chat/tools/lookup-entity.ts`
 
 ```typescript
-// worker/src/chatbot/tools/lookup-entity.ts
+// lib/chat/tools/lookup-entity.ts
 import { SupabaseClient } from '@supabase/supabase-js'
 import type { ChatTool } from '../chat-orchestrator.js'
 
@@ -4249,10 +3944,10 @@ ${(relationships || []).map((r: any) => `- ${r.relationship_type} with ${r.entit
 }
 ```
 
-File: `worker/src/chatbot/tools/map-connections.ts`
+File: `lib/chat/tools/map-connections.ts`
 
 ```typescript
-// worker/src/chatbot/tools/map-connections.ts
+// lib/chat/tools/map-connections.ts
 import { SupabaseClient } from '@supabase/supabase-js'
 import type { ChatTool } from '../chat-orchestrator.js'
 
@@ -4299,10 +3994,10 @@ Co-occurrences: Mentioned together in ${coOccurrences.length} text chunks`
 }
 ```
 
-File: `worker/src/chatbot/tools/build-timeline.ts`
+File: `lib/chat/tools/build-timeline.ts`
 
 ```typescript
-// worker/src/chatbot/tools/build-timeline.ts
+// lib/chat/tools/build-timeline.ts
 import { SupabaseClient } from '@supabase/supabase-js'
 import type { ChatTool } from '../chat-orchestrator.js'
 
@@ -4341,115 +4036,127 @@ ${events.map((e: any) => `- ${e.date_display || e.event_date || 'Unknown date'}:
 }
 ```
 
-### Step 23: Build the Chat API route
+### Step 23: Upgrade the Chat API route to use the real orchestrator
 
-File: `worker/src/api/chat.ts`
+The Phase 4 placeholder at `app/api/chat/route.ts` returns a simulated SSE stream. Now replace it with the real chat orchestrator, tools, and RAG retrieval built in Steps 22+.
+
+File: `app/api/chat/route.ts` (update existing placeholder from Phase 4)
 
 ```typescript
-// worker/src/api/chat.ts
-// Express route handler for POST /chat.
-// Accepts messages + session config, returns streaming SSE response.
+// app/api/chat/route.ts
+// Next.js App Router API route for POST /api/chat.
+// SSE streaming with real LLM integration via ChatOrchestrator.
+// Replaces the Phase 4 placeholder.
 
-import { Router, Request, Response } from 'express'
-import { SupabaseClient } from '@supabase/supabase-js'
-import { ChatOrchestrator, type ChatMessage } from '../chatbot/chat-orchestrator.js'
-import { z } from 'zod'
+import { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { ChatOrchestrator, type ChatMessage } from '@/lib/chat/chat-orchestrator'
+import { chatRequestSchema } from '@/lib/api/schemas'
 
-const ChatRequestSchema = z.object({
-  messages: z.array(
-    z.object({
-      role: z.enum(['user', 'assistant']),
-      content: z.string(),
-    })
-  ),
-  sessionId: z.string().optional(),
-  tier: z.enum(['free', 'contributor', 'researcher']).default('free'),
-})
+export const runtime = 'nodejs' // Required for streaming
+export const maxDuration = 60   // Allow up to 60s for tool-calling loops
 
-export function createChatRouter(supabase: SupabaseClient): Router {
-  const router = Router()
-
-  router.post('/', async (req: Request, res: Response) => {
-    try {
-      const parsed = ChatRequestSchema.safeParse(req.body)
-      if (!parsed.success) {
-        res.status(400).json({ error: 'Invalid request', details: parsed.error.errors })
-        return
-      }
-
-      const { messages, sessionId, tier } = parsed.data
-
-      // Rate limiting (simple in-memory — replace with Redis in production)
-      // Free: 10 messages/hour, Contributor: 50, Researcher: 200
-
-      const apiKey = process.env.GOOGLE_AI_API_KEY
-      if (!apiKey) {
-        res.status(503).json({ error: 'Chat service unavailable: no API key' })
-        return
-      }
-
-      const orchestrator = new ChatOrchestrator(
-        supabase,
-        apiKey,
-        parseInt(process.env.CHAT_MAX_TOOL_ITERATIONS || '5', 10)
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const parsed = chatRequestSchema.safeParse(body)
+    if (!parsed.success) {
+      return Response.json(
+        { error: 'Invalid request', details: parsed.error.errors },
+        { status: 400 }
       )
-
-      // Set up SSE headers for streaming
-      res.setHeader('Content-Type', 'text/event-stream')
-      res.setHeader('Cache-Control', 'no-cache')
-      res.setHeader('Connection', 'keep-alive')
-
-      // Send initial event
-      res.write(`data: ${JSON.stringify({ type: 'start' })}\n\n`)
-
-      // Process chat
-      const response = await orchestrator.chat(messages as ChatMessage[])
-
-      // Send tool usage events
-      for (const tool of response.toolsUsed) {
-        res.write(`data: ${JSON.stringify({ type: 'tool_used', tool })}\n\n`)
-      }
-
-      // Send response content
-      // In production, this would stream token by token
-      res.write(
-        `data: ${JSON.stringify({
-          type: 'content',
-          content: response.content,
-          citations: response.citations,
-        })}\n\n`
-      )
-
-      // Send done event
-      res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`)
-
-      // Save conversation if session ID provided
-      if (sessionId) {
-        await supabase.from('chat_conversations').upsert(
-          {
-            session_id: sessionId,
-            messages: [...messages, { role: 'assistant', content: response.content }],
-            model_tier: tier,
-            message_count: messages.length + 1,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'session_id' }
-        )
-      }
-
-      res.end()
-    } catch (err) {
-      console.error('[Chat API] Error:', err)
-      if (!res.headersSent) {
-        res.status(500).json({
-          error: 'Chat processing failed',
-          message: err instanceof Error ? err.message : 'Unknown error',
-        })
-      }
     }
-  })
 
-  return router
+    const { messages, sessionId, tier } = parsed.data
+
+    // Rate limiting handled by middleware (Phase 4)
+
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) {
+      return Response.json(
+        { error: 'Chat service unavailable: no API key configured' },
+        { status: 503 }
+      )
+    }
+
+    const supabase = createAdminClient()
+
+    const orchestrator = new ChatOrchestrator(
+      supabase,
+      apiKey,
+      parseInt(process.env.CHAT_MAX_TOOL_ITERATIONS || '5', 10)
+    )
+
+    // Stream response via SSE using Web Streams API
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: 'start' })}\n\n`)
+          )
+
+          const response = await orchestrator.chat(messages as ChatMessage[])
+
+          for (const tool of response.toolsUsed) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: 'tool_used', tool })}\n\n`)
+            )
+          }
+
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: 'content',
+                content: response.content,
+                citations: response.citations,
+              })}\n\n`
+            )
+          )
+
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`)
+          )
+
+          // Save conversation
+          if (sessionId) {
+            await supabase.from('chat_conversations').upsert(
+              {
+                session_id: sessionId,
+                messages: [...messages, { role: 'assistant', content: response.content }],
+                model_tier: tier,
+                message_count: messages.length + 1,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: 'session_id' }
+            )
+          }
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : 'Unknown error'
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: 'error', error: errorMsg })}\n\n`)
+          )
+        } finally {
+          controller.close()
+        }
+      },
+    })
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      },
+    })
+  } catch (err) {
+    console.error('[Chat API] Error:', err)
+    return Response.json(
+      { error: 'Chat processing failed' },
+      { status: 500 }
+    )
+  }
 }
 ```
 
@@ -4713,14 +4420,7 @@ async function main() {
         continue
       }
 
-      // Create processing job
-      await supabase.from('processing_jobs').insert({
-        document_id: doc.id,
-        job_type: 'process_document',
-        status: 'pending',
-        priority: 0,
-      })
-
+      // Document is now pending — batch scripts will pick it up
       ingested++
       if (ingested % 100 === 0) {
         console.log(`Ingested ${ingested}/${files.length} files...`)
@@ -4730,7 +4430,7 @@ async function main() {
     }
   }
 
-  console.log(`\nIngestion complete: ${ingested}/${files.length} files queued for processing`)
+  console.log(`\nIngestion complete: ${ingested}/${files.length} files uploaded (run batch scripts to process)`)
 }
 
 main().catch(console.error)
@@ -4740,11 +4440,11 @@ main().catch(console.error)
 
 ## Gotchas
 
-1. **Worker is a separate project.** It has its own `package.json`, `node_modules`, and `tsconfig.json` inside `worker/`. Do NOT install worker dependencies in the root project. Run `cd worker && pnpm install` and `cd worker && pnpm dev` separately from the main Next.js app.
+1. **No separate project.** Pipeline services live in `lib/pipeline/`, batch scripts in `scripts/batch/`. They share the root `package.json` and `tsconfig.json`. Run batch scripts with `npx tsx scripts/batch/run-all.ts`.
 
-2. **Service role key, not anon key.** The worker needs `SUPABASE_SERVICE_ROLE_KEY` because it writes to all tables (documents, chunks, entities, etc.) without RLS restrictions. The anon key would fail on most operations. Never expose the service role key in client-side code — it lives only in `worker/.env`.
+2. **Service role key, not anon key.** Batch scripts need `SUPABASE_SERVICE_ROLE_KEY` because they write to all tables (documents, chunks, entities, etc.) without RLS restrictions. The anon key would fail on most operations. The service role key lives in `.env.local` (gitignored) and is only used server-side.
 
-3. **Redis is optional.** The `BullMQJobQueue` requires Redis but the `PollingJobQueue` does not. If `REDIS_URL` is not set, the worker automatically falls back to polling the `processing_jobs` table every 5 seconds. Polling works fine for single-worker setups; use BullMQ for multi-worker deployments.
+3. **No queue, no polling.** Batch scripts query for documents needing processing, process them, and exit. The `processing_jobs` table is still useful for tracking what has been processed (status log), but it is NOT a job queue — batch scripts don't poll it.
 
 4. **Embedding dimensions must match the database schema.** All embedding columns are `VECTOR(1024)` — text, images, video, audio all use Amazon Nova Multimodal Embeddings v1 in a unified 1024d space. If you pass embeddings of the wrong dimension, Supabase will reject the insert. Ensure Nova is configured for 1024d output (`outputEmbeddingLength: 1024`).
 
@@ -4758,80 +4458,82 @@ main().catch(console.error)
 
 9. **The cascade engine requires the `find_similar_redactions` RPC.** This function must be created in a Supabase migration (Phase 2) for vector similarity search on the `redactions.context_embedding` column. Without it, the cascade engine logs a warning and returns zero matches.
 
-10. **Chat API uses SSE (Server-Sent Events), not WebSockets.** This is simpler to implement and works through most proxies. The client reads events from `POST /chat` using an EventSource-compatible reader. Each event has a `type` field: `start`, `tool_used`, `content`, `done`.
+10. **Chat API is a Next.js API route, not a separate server.** It lives in `app/api/chat/route.ts` and streams SSE via the Web Streams API (`ReadableStream`). The Phase 4 placeholder is upgraded in Step 23 with the real orchestrator. No Express server needed.
 
 11. **Gemini function calling syntax differs from OpenAI.** Gemini uses `functionDeclarations` inside a `tools` array, and returns `functionCall` parts instead of `tool_calls`. The chat orchestrator handles this mapping internally.
 
 12. **All pipeline stages must handle missing data gracefully.** A document might have no images (skip visual embedding), no dates (skip timeline), or no [REDACTED] markers (skip redaction detection). Stages should log a message and return successfully rather than throwing.
 
-13. **The worker shares AI interfaces with the main project.** The `tsconfig.json` includes path aliases `@/lib/*` and `@/types/*` pointing to the parent directory. This avoids duplicating type definitions. If this causes issues, copy the relevant type files into `worker/src/types/`.
+13. **Inline embedding for user content.** When users submit proposals, hints, or annotations, the embedding happens inline in the Next.js API route handler — not queued for a batch script. Use `getEmbeddingProvider().embed(text)` directly in the route. This adds ~200ms latency per submission, which is acceptable for low-volume user writes.
 
 ---
 
 ## Files to Create
 
 ```
-worker/
-├── package.json
-├── tsconfig.json
-├── .env.example
-└── src/
-    ├── index.ts
-    ├── pipeline/
-    │   ├── orchestrator.ts
-    │   ├── job-queue.ts
-    │   └── stages.ts
-    ├── services/
-    │   ├── document-ai-ocr.ts
-    │   ├── classifier.ts
-    │   ├── smart-chunker.ts
-    │   ├── contextual-header-gen.ts
-    │   ├── embedding-service.ts
-    │   ├── embedding-cache.ts
-    │   ├── visual-embedding-service.ts
-    │   ├── entity-extractor.ts
-    │   ├── relationship-mapper.ts
-    │   ├── redaction-detector.ts
-    │   ├── timeline-extractor.ts
-    │   ├── document-summarizer.ts
-    │   ├── criminal-indicator-scorer.ts
-    │   ├── cascade-engine.ts
-    │   ├── audio-processor.ts
-    │   ├── structured-extractor.ts
-    │   ├── video-transcriber.ts
-    │   ├── entity-merge-detector.ts
-    │   ├── pattern-detector.ts
-    │   ├── cohere-reranker.ts
-    │   └── hint-processor.ts
-    ├── chatbot/
-    │   ├── chat-orchestrator.ts
-    │   ├── rag-retrieval.ts
-    │   ├── intent-classifier.ts
-    │   ├── conversation-memory.ts
-    │   └── tools/
-    │       ├── search-documents.ts
-    │       ├── search-images.ts
-    │       ├── lookup-entity.ts
-    │       ├── map-connections.ts
-    │       ├── build-timeline.ts
-    │       ├── cross-reference.ts
-    │       ├── search-by-date.ts
-    │       └── find-similar.ts
-    └── api/
-        └── chat.ts
+lib/pipeline/
+├── stages.ts                  # Stage definitions and ordering
+├── orchestrator.ts            # Runs stages sequentially per document
+├── batch-runner.ts            # Generic batch runner with concurrency control
+└── services/
+    ├── document-ai-ocr.ts
+    ├── classifier.ts
+    ├── smart-chunker.ts
+    ├── contextual-header-gen.ts
+    ├── embedding-service.ts
+    ├── embedding-cache.ts
+    ├── visual-embedding-service.ts
+    ├── entity-extractor.ts
+    ├── relationship-mapper.ts
+    ├── redaction-detector.ts
+    ├── timeline-extractor.ts
+    ├── document-summarizer.ts
+    ├── criminal-indicator-scorer.ts
+    ├── cascade-engine.ts
+    ├── audio-processor.ts
+    ├── structured-extractor.ts
+    ├── video-transcriber.ts
+    ├── entity-merge-detector.ts
+    ├── pattern-detector.ts
+    ├── cohere-reranker.ts
+    └── hint-processor.ts
+lib/chat/
+├── chat-orchestrator.ts
+├── rag-retrieval.ts
+├── intent-classifier.ts
+├── conversation-memory.ts
+└── tools/
+    ├── search-documents.ts
+    ├── search-images.ts
+    ├── lookup-entity.ts
+    ├── map-connections.ts
+    ├── build-timeline.ts
+    ├── cross-reference.ts
+    ├── search-by-date.ts
+    └── find-similar.ts
+scripts/batch/
+├── run-all.ts                 # Master batch script (all stages)
+├── embed-chunks.ts            # Re-embed chunks with Nova 1024d
+├── extract-entities.ts        # Entity extraction
+├── classify-docs.ts           # Document classification
+├── detect-redactions.ts       # Redaction detection
+├── extract-timeline.ts        # Timeline event extraction
+├── generate-summaries.ts      # Document summarization
+├── score-criminal.ts          # Criminal indicator scoring
+└── process-media.ts           # Image classification + video transcription
 scripts/
 ├── download-datasets.sh
-├── download-dataset.sh
 ├── seed-sample-data.ts
 ├── ingest-directory.ts
 └── estimate-costs.ts
+app/api/chat/route.ts          # Chat API (upgraded from Phase 4 placeholder)
 ```
 
 ## Acceptance Criteria
 
-1. `cd worker && pnpm install && pnpm dev` starts the worker (Express server listening on port 3001)
-2. `GET http://localhost:3001/health` returns `{ status: "ok" }` with 200
-3. Pipeline orchestrator runs through all 12 stages with real implementations (Gemini API calls)
+1. `npx tsx scripts/batch/run-all.ts --limit 5` processes 5 documents through all 12 stages
+2. `npx tsx scripts/batch/run-all.ts --dry-run` lists documents needing processing without touching them
+3. Pipeline orchestrator runs through all 12 stages with real implementations (API calls)
 4. Document processing updates `documents.processing_status` through: `pending` -> `ocr` -> `classifying` -> `chunking` -> `embedding` -> `entity_extraction` -> `relationship_mapping` -> `redaction_detection` -> `summarizing` -> `complete`
 5. OCR stage extracts text from a PDF and stores it in `documents.ocr_text`
 6. Classifier assigns one of 16 document types with confidence score
@@ -4844,23 +4546,25 @@ scripts/
 13. Document summarizer generates executive summary stored in `documents.metadata`
 14. Criminal indicator scorer flags patterns without making accusations
 15. Cascade engine finds similar unsolved redactions and creates proposals
-16. Chat API (`POST /chat`) returns streaming SSE response with tool usage and citations
+16. Chat API (`POST /api/chat`) returns streaming SSE response with tool usage and citations
 17. Chat orchestrator calls tools (search, entity lookup, timeline) and includes results in response
 18. Embedding cache returns cached embeddings without calling the provider
 19. `scripts/download-datasets.sh` is executable and handles resume on interruption
 20. `scripts/estimate-costs.ts` outputs cost breakdown for a sample directory
-21. `scripts/ingest-directory.ts` uploads files to Supabase Storage and creates processing jobs
-22. All services use Google AI API (Gemini) with proper error handling and retry logic
+21. `scripts/ingest-directory.ts` uploads files to Supabase Storage with `processing_status: 'pending'`
+22. All services use proper error handling and retry logic
 23. Error handling: failed stages retry up to 3 times with exponential backoff, then mark as `failed`
-24. Graceful shutdown: `SIGINT`/`SIGTERM` waits for active jobs to complete before exiting
-25. Job queue works in polling mode (no Redis) — claims and processes jobs from `processing_jobs` table
+24. Skip logic works: documents with existing OCR text, chunks, or entities are not reprocessed
+25. `npx tsx scripts/batch/run-all.ts --stage embed` runs only the embedding stage
 
 ## Design Notes
 
 - Pipeline stages run sequentially per document — no parallelism within a single document's pipeline
-- Multiple documents CAN process in parallel (controlled by `WORKER_CONCURRENCY`)
-- The worker is stateless — all state lives in Supabase. You can run multiple worker instances
+- Multiple documents CAN process in parallel (controlled by `BATCH_CONCURRENCY`)
+- Batch scripts are stateless — all state lives in Supabase. You can run multiple batch instances on different machines
 - Cost estimate: ~$0.005 per page all-in (OCR + embed + entity + summary). $5 donation = ~1,000 pages
 - Audio/video transcription uses OpenAI Whisper; all other AI uses Google Gemini
 - The chat orchestrator uses Gemini's native function-calling, not a text-based tool-calling hack
-- Entity deduplication is by exact name+type match. Fuzzy matching (embedding similarity) is handled by the entity-merge-detector as a separate background job, not inline during extraction
+- Entity deduplication is by exact name+type match. Fuzzy matching (embedding similarity) is handled by the entity-merge-detector as a separate batch script run, not inline during extraction
+- **No persistent server**: batch scripts run to completion and exit. For the embedding-heavy one-time pass, consider Bedrock Batch Inference (submit JSONL to S3 → AWS processes in parallel → 50% cheaper than synchronous)
+- **User content embedding**: proposals, hints, and annotations embed inline in API routes (~200ms). No queue needed for low-volume user writes
