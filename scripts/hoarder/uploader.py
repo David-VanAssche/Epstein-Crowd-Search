@@ -73,10 +73,12 @@ def upload_file_worker(url: str, key: str, local_path: str, remote_path: str) ->
         return (remote_path, False, file_size, error_msg)
 
 
-def build_local_manifest(local_dir: str, skip_dirs: set | None = None) -> list[dict]:
+def build_local_manifest(local_dir: str, skip_dirs: set | None = None,
+                         compute_hashes: bool = True) -> list[dict]:
     """
     Build a manifest of all files in a local directory.
     Returns list of {path, size, sha256} dicts.
+    Set compute_hashes=False to skip SHA-256 for large datasets (much faster).
     """
     skip_dirs = skip_dirs or {".git", "__pycache__", "node_modules", ".venv"}
     manifest = []
@@ -88,11 +90,13 @@ def build_local_manifest(local_dir: str, skip_dirs: set | None = None) -> list[d
         rel_path = file_path.relative_to(local_path)
         if any(part in skip_dirs for part in rel_path.parts):
             continue
-        manifest.append({
+        entry = {
             "path": str(rel_path),
             "size": file_path.stat().st_size,
-            "sha256": file_sha256(str(file_path)),
-        })
+        }
+        if compute_hashes:
+            entry["sha256"] = file_sha256(str(file_path))
+        manifest.append(entry)
 
     return manifest
 
@@ -142,8 +146,10 @@ def upload_directory(client: Client, local_dir: str, remote_prefix: str,
     always_skip = {".git", "__pycache__", "node_modules", ".venv", ".env"}
 
     # Build manifest BEFORE uploading
+    # Skip SHA-256 hashing for large datasets (>10K files) to avoid hours of disk reads
+    compute_hashes = int(os.environ.get("SKIP_HASHES", "0")) == 0
     console.print("[cyan]Building file manifest...[/cyan]")
-    manifest = build_local_manifest(local_dir, skip_dirs=always_skip)
+    manifest = build_local_manifest(local_dir, skip_dirs=always_skip, compute_hashes=compute_hashes)
     total_size_mb = sum(f["size"] for f in manifest) / 1024 / 1024
     console.print(f"[cyan]Found {len(manifest)} files ({total_size_mb:.1f}MB)[/cyan]")
 
