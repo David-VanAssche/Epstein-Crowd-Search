@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import {
   Brain,
   Layers,
@@ -92,6 +92,8 @@ const SEARCH_PAGE_EXAMPLES = [
 ]
 
 export function SearchEmptyState() {
+  const prefersReducedMotion = useReducedMotion()
+
   return (
     <div className="flex flex-col items-center text-center">
       {/* Heading */}
@@ -136,9 +138,9 @@ export function SearchEmptyState() {
             return (
               <motion.div
                 key={example.query}
-                initial={{ opacity: 0, y: 12 }}
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.08, duration: 0.3 }}
+                transition={prefersReducedMotion ? { duration: 0 } : { delay: i * 0.08, duration: 0.3 }}
               >
                 <Link
                   href={`/search?q=${encodeURIComponent(example.query)}`}

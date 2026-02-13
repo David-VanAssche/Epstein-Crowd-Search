@@ -61,7 +61,7 @@ export function SearchBar({ defaultValue = '' }: SearchBarProps) {
 
   return (
     <div className="flex w-full items-center gap-2">
-      <form onSubmit={handleSubmit} className="flex-1">
+      <form onSubmit={handleSubmit} className="flex-1" role="search" aria-label="Search documents">
         <div
           className={cn(
             'flex items-center rounded-xl border border-border bg-surface transition-all duration-200',
@@ -87,12 +87,15 @@ export function SearchBar({ defaultValue = '' }: SearchBarProps) {
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               placeholder={showRotating ? '' : 'Ask anything...'}
+              aria-label="Search documents"
               className="h-12 border-0 bg-transparent pl-3 pr-10 text-lg shadow-none ring-0 focus-visible:ring-0"
             />
             {/* Rotating placeholder overlay */}
             {showRotating && (
               <span
                 key={placeholderIndex}
+                aria-live="polite"
+                aria-atomic="true"
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg text-muted-foreground/60 animate-in fade-in duration-500"
               >
                 {ROTATING_PLACEHOLDERS[placeholderIndex]}

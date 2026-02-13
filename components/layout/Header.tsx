@@ -16,7 +16,6 @@ import {
   LogIn,
   LogOut,
   User,
-  Bell,
   Bookmark,
   Mail,
   DollarSign,
