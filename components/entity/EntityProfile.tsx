@@ -57,7 +57,7 @@ export function EntityProfile({ entity }: EntityProfileProps) {
         </TabsContent>
 
         <TabsContent value="connections" className="mt-6">
-          <EntityConnections entityId={entity.id} />
+          <EntityConnections entityId={entity.id} entityName={entity.name} />
         </TabsContent>
 
         <TabsContent value="timeline" className="mt-6">
