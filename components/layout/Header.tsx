@@ -18,6 +18,11 @@ import {
   User,
   Bell,
   Bookmark,
+  Mail,
+  DollarSign,
+  AlertTriangle,
+  Network,
+  ChevronDown,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
@@ -34,16 +39,25 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown'
 import { DonationCTA } from '@/components/funding/DonationCTA'
 
-const navItems = [
+const primaryNav = [
   { href: '/search', label: 'Search', icon: Search },
   { href: '/entities', label: 'Entities', icon: Users },
   { href: '/timeline', label: 'Timeline', icon: Clock },
+  { href: '/flights', label: 'Flights', icon: Plane },
+  { href: '/emails', label: 'Emails', icon: Mail },
+  { href: '/finances', label: 'Finances', icon: DollarSign },
+]
+
+const moreNav = [
   { href: '/redactions', label: 'Redactions', icon: ShieldAlert },
+  { href: '/contradictions', label: 'Contradictions', icon: AlertTriangle },
+  { href: '/analysis', label: 'Analysis', icon: Network },
   { href: '/photos', label: 'Photos', icon: Camera },
   { href: '/audio', label: 'Audio', icon: Headphones },
-  { href: '/flights', label: 'Flights', icon: Plane },
   { href: '/sources', label: 'Sources', icon: Database },
 ]
+
+const allNav = [...primaryNav, ...moreNav]
 
 export function Header() {
   const pathname = usePathname()
@@ -58,13 +72,13 @@ export function Header() {
         {/* Logo */}
         <Link href="/" className="mr-6 flex items-center space-x-2">
           <span className="text-lg font-bold text-foreground">
-            The Epstein Archive
+            Epstein Crowd Research
           </span>
         </Link>
 
         {/* Desktop Navigation */}
         <nav className="hidden lg:flex items-center space-x-1 text-sm">
-          {navItems.map((item) => {
+          {primaryNav.map((item) => {
             const Icon = item.icon
             return (
               <Link
@@ -81,6 +95,33 @@ export function Header() {
               </Link>
             )
           })}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={cn(
+                  'flex items-center gap-1 px-3 py-2 rounded-md transition-colors',
+                  'text-muted-foreground hover:text-foreground hover:bg-surface',
+                  moreNav.some((item) => pathname === item.href) && 'text-foreground bg-surface'
+                )}
+              >
+                More
+                <ChevronDown className="h-3 w-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              {moreNav.map((item) => {
+                const Icon = item.icon
+                return (
+                  <DropdownMenuItem key={item.href} asChild>
+                    <Link href={item.href} className="flex items-center gap-2">
+                      <Icon className="h-4 w-4" />
+                      {item.label}
+                    </Link>
+                  </DropdownMenuItem>
+                )
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </nav>
 
         {/* Right side */}
@@ -142,7 +183,7 @@ export function Header() {
             </SheetTrigger>
             <SheetContent side="right" className="w-[300px] bg-background">
               <nav className="flex flex-col space-y-1 mt-8">
-                {navItems.map((item) => {
+                {allNav.map((item) => {
                   const Icon = item.icon
                   return (
                     <Link

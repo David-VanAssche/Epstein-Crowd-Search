@@ -14,6 +14,10 @@ export enum PipelineStage {
   TIMELINE_EXTRACT = 'timeline_extract',
   SUMMARIZE = 'summarize',
   CRIMINAL_INDICATORS = 'criminal_indicators',
+  EMAIL_EXTRACT = 'email_extract',
+  FINANCIAL_EXTRACT = 'financial_extract',
+  CO_FLIGHT_LINKS = 'co_flight_links',
+  NETWORK_METRICS = 'network_metrics',
 }
 
 export interface StageDefinition {
@@ -139,6 +143,42 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     idempotent: true,
     maxRetries: 3,
   },
+  {
+    stage: PipelineStage.EMAIL_EXTRACT,
+    label: 'Email Extraction',
+    description: 'Extract structured email data (from/to/cc, body, threads) from documents classified as correspondence',
+    dependsOn: [PipelineStage.ENTITY_EXTRACT],
+    estimatedCostPerPage: 0.0006,
+    idempotent: true,
+    maxRetries: 3,
+  },
+  {
+    stage: PipelineStage.FINANCIAL_EXTRACT,
+    label: 'Financial Extraction',
+    description: 'Extract financial transactions, wire transfers, and payments with suspicious pattern flagging',
+    dependsOn: [PipelineStage.ENTITY_EXTRACT],
+    estimatedCostPerPage: 0.0006,
+    idempotent: true,
+    maxRetries: 3,
+  },
+  {
+    stage: PipelineStage.CO_FLIGHT_LINKS,
+    label: 'Co-Flight Link Generation',
+    description: 'Generate traveled_with relationships from shared flights and communicated_with from email co-occurrence',
+    dependsOn: [PipelineStage.EMAIL_EXTRACT, PipelineStage.ENTITY_EXTRACT],
+    estimatedCostPerPage: 0.0,
+    idempotent: true,
+    maxRetries: 2,
+  },
+  {
+    stage: PipelineStage.NETWORK_METRICS,
+    label: 'Network Metrics Computation',
+    description: 'Compute PageRank, betweenness centrality, and community detection across entity network',
+    dependsOn: [PipelineStage.CO_FLIGHT_LINKS],
+    estimatedCostPerPage: 0.0,
+    idempotent: true,
+    maxRetries: 2,
+  },
 ]
 
 /**
@@ -203,6 +243,10 @@ export function stageToStatus(stage: PipelineStage): ProcessingStatus {
     [PipelineStage.TIMELINE_EXTRACT]: PROCESSING_STATUS.ENTITY_EXTRACTION,
     [PipelineStage.SUMMARIZE]: PROCESSING_STATUS.SUMMARIZING,
     [PipelineStage.CRIMINAL_INDICATORS]: PROCESSING_STATUS.SUMMARIZING,
+    [PipelineStage.EMAIL_EXTRACT]: PROCESSING_STATUS.ENTITY_EXTRACTION,
+    [PipelineStage.FINANCIAL_EXTRACT]: PROCESSING_STATUS.ENTITY_EXTRACTION,
+    [PipelineStage.CO_FLIGHT_LINKS]: PROCESSING_STATUS.COMPLETE,
+    [PipelineStage.NETWORK_METRICS]: PROCESSING_STATUS.COMPLETE,
   }
   return map[stage]
 }

@@ -46,6 +46,8 @@ export type ExtractionType =
   | 'financial_record'
   | 'phone_record'
   | 'address_book_entry'
+  | 'email'
+  | 'financial_transaction'
 
 export interface Annotation {
   id: string

@@ -7,6 +7,10 @@ import { searchDocumentsTool } from './tools/search-documents'
 import { lookupEntityTool } from './tools/lookup-entity'
 import { mapConnectionsTool } from './tools/map-connections'
 import { buildTimelineTool } from './tools/build-timeline'
+import { findPathTool } from './tools/find-path'
+import { temporalAnalysisTool } from './tools/temporal-analysis'
+import { flightAnalysisTool } from './tools/flight-analysis'
+import { financialAnalysisTool } from './tools/financial-analysis'
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system' | 'tool'
@@ -28,7 +32,7 @@ export interface ChatResponse {
   toolsUsed: string[]
 }
 
-const SYSTEM_PROMPT = `You are a research assistant for the Epstein Files Archive — a database of 3.5 million pages of documents released by the U.S. Department of Justice. Your role is to help researchers, journalists, and the public navigate this evidence.
+const SYSTEM_PROMPT = `You are a research assistant for Epstein Crowd Research — a database of 3.5 million pages of documents released by the U.S. Department of Justice. Your role is to help researchers, journalists, and the public navigate this evidence.
 
 Guidelines:
 - Always cite your sources with document IDs and page numbers
@@ -56,6 +60,10 @@ export class ChatOrchestrator {
     this.registerTool(lookupEntityTool)
     this.registerTool(mapConnectionsTool)
     this.registerTool(buildTimelineTool)
+    this.registerTool(findPathTool)
+    this.registerTool(temporalAnalysisTool)
+    this.registerTool(flightAnalysisTool)
+    this.registerTool(financialAnalysisTool)
   }
 
   registerTool(tool: ChatTool): void {

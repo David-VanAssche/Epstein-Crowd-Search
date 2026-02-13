@@ -1,5 +1,7 @@
 // types/entities.ts
 
+import type { PersonCategory } from './structured-data'
+
 export type EntityType =
   | 'person'
   | 'organization'
@@ -41,6 +43,14 @@ export interface Entity {
   is_verified: boolean
   created_at: string
   updated_at: string
+  // Wikidata enrichment (Phase 11)
+  category: PersonCategory | null
+  wikidata_id: string | null
+  photo_url: string | null
+  birth_date: string | null
+  death_date: string | null
+  nationality: string[]
+  occupation: string[]
 }
 
 export interface EntityMention {

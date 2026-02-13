@@ -21,6 +21,8 @@ import { handleRedactionDetect } from '../../lib/pipeline/services/redaction-det
 import { handleTimelineExtract } from '../../lib/pipeline/services/timeline-extractor'
 import { handleSummarize } from '../../lib/pipeline/services/document-summarizer'
 import { handleCriminalIndicators } from '../../lib/pipeline/services/criminal-indicator-scorer'
+import { handleEmailExtract } from '../../lib/pipeline/services/email-extractor'
+import { handleFinancialExtract } from '../../lib/pipeline/services/financial-extractor'
 
 // --- Parse CLI args ---
 const args = process.argv.slice(2)
@@ -75,6 +77,8 @@ async function main() {
   pipeline.registerStage(PipelineStage.TIMELINE_EXTRACT, handleTimelineExtract)
   pipeline.registerStage(PipelineStage.SUMMARIZE, handleSummarize)
   pipeline.registerStage(PipelineStage.CRIMINAL_INDICATORS, handleCriminalIndicators)
+  pipeline.registerStage(PipelineStage.EMAIL_EXTRACT, async (docId, sb) => { await handleEmailExtract(docId, sb) })
+  pipeline.registerStage(PipelineStage.FINANCIAL_EXTRACT, async (docId, sb) => { await handleFinancialExtract(docId, sb) })
 
   // --- Skip check registrations ---
   pipeline.registerSkipCheck(PipelineStage.OCR, async (docId, sb) => {

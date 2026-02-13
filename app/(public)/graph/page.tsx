@@ -2,7 +2,8 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { Suspense, useState, useCallback, useEffect } from 'react'
+import { Suspense, useState, useCallback, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { GraphControls } from '@/components/graph/GraphControls'
@@ -23,8 +24,12 @@ const RelationshipGraph = dynamic(
 )
 
 export default function GraphPage() {
-  const [nodes] = useState<GraphNode[]>([])
-  const [edges] = useState<GraphEdge[]>([])
+  const searchParams = useSearchParams()
+  const entityParam = searchParams.get('entity')
+  const [nodes, setNodes] = useState<GraphNode[]>([])
+  const [edges, setEdges] = useState<GraphEdge[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const hasFetched = useRef(false)
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null)
   const [selectedEdge, setSelectedEdge] = useState<GraphEdge | null>(null)
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null)
@@ -76,6 +81,31 @@ export default function GraphPage() {
     }
   }, [])
 
+  // Fetch graph data from API on mount
+  useEffect(() => {
+    if (hasFetched.current) return
+    hasFetched.current = true
+
+    const params = new URLSearchParams()
+    if (entityParam) {
+      params.set('entity', entityParam)
+      params.set('depth', '2')
+      params.set('limit', '200')
+    } else {
+      params.set('limit', '150')
+    }
+
+    fetch(`/api/graph/entities?${params}`)
+      .then((res) => res.json())
+      .then((json) => {
+        const data = json.data || json
+        if (data.nodes) setNodes(data.nodes)
+        if (data.edges) setEdges(data.edges)
+      })
+      .catch((err) => console.error('[Graph] Failed to load data:', err))
+      .finally(() => setIsLoading(false))
+  }, [entityParam])
+
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement)
@@ -83,6 +113,10 @@ export default function GraphPage() {
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
+
+  if (isLoading) {
+    return <LoadingState variant="page" />
+  }
 
   if (nodes.length === 0) {
     return (

@@ -63,7 +63,10 @@ The build is a single interleaved sequence where each step includes building fea
 | 15 | Verification scripts | Master index cross-reference | No missing docs, coverage report generated |
 | 16 | Phase 9 (Polish/Deploy) | — | Lighthouse 90+, rate limits work, production live |
 | 17 | Phase 10 (Gamification) | — | XP awards, leaderboard updates, achievements unlock |
-| 18 | — | — (refresh all views) | Full end-to-end acceptance across all user journeys |
+| 18 | Phase 11 (Structured Data) | — (run email/financial extractors) | Emails/financial tables populated, Wikidata enriched |
+| 19 | Phase 12 (Network Analysis) | — (run co-flight linker + metrics) | Materialized views populated, graph page shows live data, path finder works |
+| 20 | Phase 13 (Research Tools UI) | — | All 4 new pages functional, D3 visualizations render, header nav updated |
+| 21 | — | — (refresh all views) | Full end-to-end acceptance across all user journeys |
 
 ### Dependency Chain
 
@@ -126,7 +129,10 @@ Parallel: Steps 3-4 can run concurrently with Steps 5-6 if two engineers availab
 | 8 | ~20 (graph + timeline + cascade + map + pinboard) |
 | 9 | ~25 (loading states + tests + deploy config + SEO + safety) |
 | 10 | ~20 (gamification + leaderboard + achievements + bounties) |
-| **Total** | **~275 files** |
+| 11 | ~14 (1 migration + 1 type file + 4 services + 4 batch scripts + entity/collab types + stages) |
+| 12 | ~21 (1 migration + 1 type file + 2 services + 2 batch scripts + 6 API routes + 4 chat tools + schemas) |
+| 13 | ~35 (1 migration + 3 type files + 4 hooks + 9 API routes + 15 components + 4 pages) |
+| **Total** | **~345 files** |
 
 ## Directory Structure Summary
 
@@ -152,6 +158,11 @@ epstein-archive/
 │   ├── funding/               # Funding tracker, impact calc
 │   ├── contribute/            # Contribution hub, forms
 │   ├── gamification/          # Leaderboard, achievements, XP
+│   ├── email/                 # Email browser components
+│   ├── finance/               # Financial flow viewer, Sankey diagram
+│   ├── analysis/              # Network analysis dashboard, centrality
+│   ├── investigation/         # Thread convergence, related threads
+│   ├── browse/                # Ghost flight badge, enhanced flight browser
 │   ├── ui/                    # shadcn/ui (auto-generated)
 │   └── shared/                # EmptyState, LoadingState, ErrorBoundary
 ├── lib/
@@ -171,8 +182,14 @@ epstein-archive/
 │       ├── extract-timeline.ts # Timeline event extraction
 │       ├── generate-summaries.ts # Document summarization
 │       ├── score-criminal.ts  # Criminal indicator scoring
-│       └── process-media.ts   # Image classification + video transcription
-├── supabase/migrations/       # 15 SQL migrations
+│       ├── process-media.ts   # Image classification + video transcription
+│       ├── extract-emails.ts  # Email extraction from documents
+│       ├── extract-financial.ts # Financial transaction extraction
+│       ├── categorize-persons.ts # Person entity categorization
+│       ├── enrich-wikidata.ts # Wikidata enrichment (photos, dates)
+│       ├── generate-co-flight-links.ts # Co-flight relationship generation
+│       └── compute-network-metrics.ts  # PageRank, betweenness, clusters
+├── supabase/migrations/       # 18 SQL migrations
 ├── types/                     # TypeScript type definitions
 └── public/                    # Static assets
 ```
@@ -200,7 +217,7 @@ epstein-archive/
 
 ## Database Schema
 
-15 migrations in `supabase/migrations/`:
+18 migrations in `supabase/migrations/`:
 
 1. **Extensions** — pgvector, pg_trgm, uuid-ossp
 2. **Core tables** — datasets, documents, chunks, images, videos, video_chunks, processing_jobs
@@ -217,6 +234,9 @@ epstein-archive/
 13. **Funding tables** — funding_status, processing_spend_log, donation_impact_tiers
 14. **Contribution tables** — image_match_submissions, intelligence_hints, contribution_activity
 15. **Gamification tables** — achievements, user_achievements, xp_transactions, weekly_leaderboard view
+16. **Structured data enrichment** (Phase 11) — emails, financial_transactions, property_ownership, contradictions, thread_convergences tables; entity enrichment columns (category, wikidata, photo); flight enrichment (manifest_status); auto-verify + auto-sort triggers
+17. **Network analysis** (Phase 12) — find_temporal_clusters, find_co_temporal_entities, find_shortest_path functions; flight_passenger_stats, email_communication_stats, entity_network_metrics materialized views; refresh_network_views function
+18. **Research tools** (Phase 13) — doj_releases table, contradiction_votes table with auto-update trigger
 
 ## Crowdsourced Research Philosophy
 
