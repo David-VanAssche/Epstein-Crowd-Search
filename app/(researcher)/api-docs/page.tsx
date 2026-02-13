@@ -22,7 +22,7 @@ export default function ApiDocsPage() {
           <Badge variant="outline" className="text-amber-400 border-amber-400/30">Coming Soon</Badge>
         </div>
         <p className="mt-2 text-muted-foreground">
-          Programmatic access to the Epstein Archive data for researchers, journalists, and developers.
+          Programmatic access to the Epstein Crowd Research data for researchers, journalists, and developers.
         </p>
       </div>
 

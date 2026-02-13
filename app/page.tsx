@@ -10,12 +10,11 @@ import type { CorpusStats } from '@/types/collaboration'
 export const dynamic = 'force-dynamic'
 
 const SAMPLE_SEARCHES = [
-  'flight logs passenger list',
-  'Palm Beach police report',
-  'financial transactions 2003',
-  'deposition testimony Maxwell',
-  'Little St. James island',
-  'FBI interview summary',
+  'Names redacted in the 2006 FBI 302s that appear unredacted in later court filings',
+  'Photos from Little St. James matching people named in flight logs',
+  'Financial transfers within 30 days of flights to Zorro Ranch',
+  'Witness testimony that contradicts Maxwell\'s deposition about recruitment',
+  'Communications mentioning underage individuals between 2001-2005',
 ]
 
 async function getStats() {

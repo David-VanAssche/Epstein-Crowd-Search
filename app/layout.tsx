@@ -18,16 +18,16 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'The Epstein Archive',
-    template: '%s | The Epstein Archive',
+    default: 'Epstein Crowd Research',
+    template: '%s | Epstein Crowd Research',
   },
   description:
     '3.5 million pages of Epstein files, now searchable. AI-powered search, entity mapping, and crowdsourced redaction solving.',
   openGraph: {
-    title: 'The Epstein Archive',
+    title: 'Epstein Crowd Research',
     description: '3.5 million pages of truth, now searchable.',
-    url: 'https://epsteinarchive.org',
-    siteName: 'The Epstein Archive',
+    url: 'https://epsteincrowdresearch.com',
+    siteName: 'Epstein Crowd Research',
     type: 'website',
   },
 }

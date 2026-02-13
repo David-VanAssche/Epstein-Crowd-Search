@@ -3,11 +3,12 @@
 
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
+import { FileText, Image, Mic, Video, Users } from 'lucide-react'
 import { SearchBar } from '@/components/search/SearchBar'
 import { SearchResults } from '@/components/search/SearchResults'
 import { SearchFilters } from '@/components/search/SearchFilters'
+import { SearchEmptyState } from '@/components/search/SearchEmptyState'
 import { Sidebar } from '@/components/layout/Sidebar'
-import { EmptyState } from '@/components/shared/EmptyState'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { SearchTab } from '@/types/search'
 
@@ -16,6 +17,21 @@ function SearchPageContent() {
   const query = searchParams.get('q') || ''
   const tab = (searchParams.get('tab') as SearchTab) || 'all'
 
+  // No query: centered landing mode
+  if (!query) {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4">
+        <div className="w-full max-w-2xl">
+          <SearchBar />
+        </div>
+        <div className="mt-10 w-full max-w-2xl">
+          <SearchEmptyState />
+        </div>
+      </div>
+    )
+  }
+
+  // Has query: results mode with sidebar + tabs
   return (
     <div className="flex min-h-[calc(100vh-4rem)]">
       {/* Filters Sidebar */}
@@ -34,24 +50,30 @@ function SearchPageContent() {
         <Tabs value={tab} className="mt-4">
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-            <TabsTrigger value="images">Images</TabsTrigger>
-            <TabsTrigger value="audio">Audio</TabsTrigger>
-            <TabsTrigger value="videos">Videos</TabsTrigger>
-            <TabsTrigger value="entities">Entities</TabsTrigger>
+            <TabsTrigger value="documents" className="gap-1.5">
+              <FileText className="h-3.5 w-3.5" />
+              Documents
+            </TabsTrigger>
+            <TabsTrigger value="images" className="gap-1.5">
+              <Image className="h-3.5 w-3.5" />
+              Images
+            </TabsTrigger>
+            <TabsTrigger value="audio" className="gap-1.5">
+              <Mic className="h-3.5 w-3.5" />
+              Audio
+            </TabsTrigger>
+            <TabsTrigger value="videos" className="gap-1.5">
+              <Video className="h-3.5 w-3.5" />
+              Videos
+            </TabsTrigger>
+            <TabsTrigger value="entities" className="gap-1.5">
+              <Users className="h-3.5 w-3.5" />
+              Entities
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value={tab} className="mt-4">
-            {query ? (
-              <SearchResults query={query} />
-            ) : (
-              <EmptyState
-                variant="no-results"
-                title="Search the Epstein Files"
-                description="Enter a search query to search across 3.5 million pages of DOJ documents, images, audio, and video transcripts."
-                showFundingCTA
-              />
-            )}
+            <SearchResults query={query} />
           </TabsContent>
         </Tabs>
       </main>

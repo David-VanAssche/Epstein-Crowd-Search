@@ -9,7 +9,7 @@ export function Footer() {
           {/* About */}
           <div>
             <h3 className="text-sm font-semibold text-foreground mb-3">
-              The Epstein Archive
+              Epstein Crowd Research
             </h3>
             <p className="text-sm text-muted-foreground">
               Open-source platform for searching 3.5 million pages of

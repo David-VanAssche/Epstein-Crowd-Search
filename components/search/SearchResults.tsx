@@ -21,8 +21,8 @@ export function SearchResults({ query }: SearchResultsProps) {
     return (
       <EmptyState
         variant="no-results"
-        title="No results yet"
-        description={`No results found for "${query}". Documents are still being processed — more results will appear as the corpus grows.`}
+        title="No matches found"
+        description={`No results for "${query}". Try rephrasing as a natural language question — this search understands meaning, not just keywords.`}
         showFundingCTA
       />
     )
@@ -31,7 +31,7 @@ export function SearchResults({ query }: SearchResultsProps) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        {totalCount.toLocaleString()} result{totalCount !== 1 ? 's' : ''} for &ldquo;{query}&rdquo;
+        {totalCount.toLocaleString()} semantic match{totalCount !== 1 ? 'es' : ''} for &ldquo;{query}&rdquo;
       </p>
       {results.map((result) => (
         <ResultCard

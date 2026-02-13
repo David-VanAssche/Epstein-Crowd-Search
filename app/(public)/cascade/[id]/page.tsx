@@ -11,7 +11,7 @@ export async function generateMetadata({ params }: CascadePageProps): Promise<Me
   const { id } = await params
 
   return {
-    title: `Cascade Impact | Epstein Archive`,
+    title: `Cascade Impact | Epstein Crowd Research`,
     description: `A single discovery in the Epstein files cascaded to multiple matches across documents.`,
     openGraph: {
       title: `Cascade Impact: Discovery Chain`,

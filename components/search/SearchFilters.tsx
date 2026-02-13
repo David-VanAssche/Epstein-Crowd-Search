@@ -1,18 +1,33 @@
 // components/search/SearchFilters.tsx
 'use client'
 
+import { Brain, Layers } from 'lucide-react'
 import { useSearch } from '@/lib/hooks/useSearch'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { Badge } from '@/components/ui/badge'
 
 export function SearchFilters() {
   const { filters, setFilter } = useSearch()
 
   return (
     <div className="space-y-6 p-4">
+      {/* Search mode indicator */}
+      <div className="rounded-lg border border-border bg-surface-elevated p-3">
+        <p className="mb-2 text-xs font-medium text-muted-foreground">Search mode</p>
+        <div className="flex flex-wrap gap-1.5">
+          <Badge variant="outline" className="gap-1 text-xs text-accent border-accent/30">
+            <Brain className="h-3 w-3" /> Semantic
+          </Badge>
+          <Badge variant="outline" className="gap-1 text-xs text-blue-400 border-blue-400/30">
+            <Layers className="h-3 w-3" /> Multimodal
+          </Badge>
+        </div>
+      </div>
+
       <h3 className="text-sm font-semibold">Filters</h3>
 
       {/* Dataset Filter */}

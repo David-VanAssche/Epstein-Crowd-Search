@@ -6,11 +6,11 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 export default function AboutPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 lg:px-8">
-      <h1 className="mb-4 text-3xl font-bold">About The Epstein Archive</h1>
+      <h1 className="mb-4 text-3xl font-bold">About Epstein Crowd Research</h1>
 
       <section className="mb-12">
         <p className="mb-4 text-lg text-muted-foreground">
-          The Epstein Archive is an open-source platform for searching, analyzing,
+          Epstein Crowd Research is an open-source platform for searching, analyzing,
           and connecting the 3.5 million pages of documents released by the U.S. Department
           of Justice related to Jeffrey Epstein. Our mission is to make this evidence
           accessible, searchable, and actionable.
@@ -92,7 +92,7 @@ export default function AboutPage() {
         <h2 className="mb-4 text-2xl font-bold">Media & Citations</h2>
         <p className="text-muted-foreground">
           When citing findings from this platform, please reference the original DOJ document
-          (dataset number, filename, page number) as well as The Epstein Archive as the discovery tool.
+          (dataset number, filename, page number) as well as Epstein Crowd Research as the discovery tool.
           For press inquiries, contact us via our GitHub repository.
         </p>
       </section>
