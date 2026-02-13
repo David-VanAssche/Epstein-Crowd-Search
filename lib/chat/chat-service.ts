@@ -42,11 +42,11 @@ export async function sendChatMessage(
           }
           break
         case 'done':
-          options.onDone()
+          options.onDone(event.conversation_id)
           break
         case 'error':
           options.onError(event.error || 'Unknown streaming error')
-          break
+          return
       }
     }
   } catch (err) {

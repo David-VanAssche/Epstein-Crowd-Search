@@ -16,7 +16,7 @@ export default function ProfilePage() {
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile', user?.id],
-    queryFn: () => fetchApi<UserProfile>('/api/notifications?type=profile'),
+    queryFn: () => fetchApi<UserProfile>('/api/profile'),
     enabled: !!user,
     staleTime: 30_000,
   })

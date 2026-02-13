@@ -14,11 +14,15 @@ interface DocumentPageProps {
 }
 
 async function getDocument(id: string) {
+  // Validate UUID format before making internal request (prevents SSRF via path traversal)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!uuidRegex.test(id)) return null
+
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000'
-    const res = await fetch(`${baseUrl}/api/document/${id}`, { next: { revalidate: 60 } })
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+      || 'http://localhost:3000'
+    const res = await fetch(`${baseUrl}/api/document/${encodeURIComponent(id)}`, { next: { revalidate: 60 } })
     if (!res.ok) return null
     const json = await res.json()
     return json.data ?? null

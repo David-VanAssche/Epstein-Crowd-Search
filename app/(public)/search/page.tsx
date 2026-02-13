@@ -43,7 +43,7 @@ function SearchPageContent() {
 
           <TabsContent value={tab} className="mt-4">
             {query ? (
-              <SearchResults query={query} tab={tab} />
+              <SearchResults query={query} />
             ) : (
               <EmptyState
                 variant="no-results"

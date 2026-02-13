@@ -16,13 +16,11 @@ interface ChatPanelProps {
 
 export function ChatPanel({ open, onClose }: ChatPanelProps) {
   const { messages, isStreaming, error, send, clearMessages } = useChat()
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const scrollEndRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll on new messages
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
+    scrollEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
   if (!open) return null
@@ -46,7 +44,7 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <ScrollArea className="flex-1 p-4">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
             <p className="text-sm font-medium text-foreground mb-1">Welcome</p>
@@ -75,6 +73,7 @@ export function ChatPanel({ open, onClose }: ChatPanelProps) {
             {messages.map((msg) => (
               <ChatMessage key={msg.id} message={msg} />
             ))}
+            <div ref={scrollEndRef} />
           </div>
         )}
         {error && (

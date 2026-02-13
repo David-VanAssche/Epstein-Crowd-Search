@@ -2,7 +2,7 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { fetchApi } from '@/lib/api/client'
+import { fetchPaginated } from '@/lib/api/client'
 import type { Notification } from '@/types/collaboration'
 import { useAuth } from './useAuth'
 
@@ -11,8 +11,11 @@ export function useNotifications() {
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
-    queryKey: ['notifications'],
-    queryFn: () => fetchApi<Notification[]>('/api/notifications'),
+    queryKey: ['notifications', user?.id],
+    queryFn: async () => {
+      const result = await fetchPaginated<Notification>('/api/notifications')
+      return result.items
+    },
     enabled: !!user,
     staleTime: 30_000,
     refetchInterval: 60_000, // Poll every minute
@@ -20,27 +23,29 @@ export function useNotifications() {
 
   const markRead = useMutation({
     mutationFn: async (notificationId: string) => {
-      return fetchApi(`/api/notifications`, {
-        method: 'PATCH',
+      const res = await fetch('/api/notifications', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: notificationId, is_read: true }),
+        body: JSON.stringify({ notification_ids: [notificationId] }),
       })
+      if (!res.ok) throw new Error('Failed to mark notification as read')
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] })
     },
   })
 
   const markAllRead = useMutation({
     mutationFn: async () => {
-      return fetchApi(`/api/notifications`, {
-        method: 'PATCH',
+      const res = await fetch('/api/notifications', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mark_all_read: true }),
+        body: JSON.stringify({ mark_all: true }),
       })
+      if (!res.ok) throw new Error('Failed to mark all notifications as read')
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] })
     },
   })
 

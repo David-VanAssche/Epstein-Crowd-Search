@@ -5,16 +5,13 @@ import { useSearch } from '@/lib/hooks/useSearch'
 import { ResultCard } from './ResultCard'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { LoadingState } from '@/components/shared/LoadingState'
-import { Button } from '@/components/ui/button'
-import type { SearchTab } from '@/types/search'
 
 interface SearchResultsProps {
   query: string
-  tab: SearchTab
 }
 
-export function SearchResults({ query, tab }: SearchResultsProps) {
-  const { results, totalCount, isLoading, page, setQuery } = useSearch()
+export function SearchResults({ query }: SearchResultsProps) {
+  const { results, totalCount, isLoading } = useSearch()
 
   if (isLoading) {
     return <LoadingState variant="list" count={5} />

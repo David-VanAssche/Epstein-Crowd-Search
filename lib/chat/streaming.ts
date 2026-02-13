@@ -62,6 +62,10 @@ export async function fetchWithRetry(
       const response = await fetch(url, options)
 
       if (!response.ok) {
+        // Don't retry client errors (4xx) — only retry server/network errors
+        if (response.status >= 400 && response.status < 500) {
+          return response
+        }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 

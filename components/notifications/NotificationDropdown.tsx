@@ -14,6 +14,12 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useNotifications } from '@/lib/hooks/useNotifications'
 
+function safeLink(link: string | null): string {
+  if (!link) return '#'
+  if (link.startsWith('/') && !link.startsWith('//')) return link
+  return '#'
+}
+
 export function NotificationDropdown() {
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications()
 
@@ -60,7 +66,7 @@ export function NotificationDropdown() {
                 }}
               >
                 <Link
-                  href={notification.link ?? '#'}
+                  href={safeLink(notification.link)}
                   className={`flex flex-col gap-0.5 px-3 py-2 ${
                     !notification.is_read ? 'bg-primary/5' : ''
                   }`}

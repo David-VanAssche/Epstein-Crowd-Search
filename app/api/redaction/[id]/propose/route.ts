@@ -10,6 +10,27 @@ interface RouteParams {
   params: Promise<{ id: string }>
 }
 
+export async function GET(_request: NextRequest, { params }: RouteParams) {
+  try {
+    const { id: redactionId } = await params
+    const supabase = await createClient()
+
+    const { data: proposals, error } = await supabase
+      .from('redaction_proposals')
+      .select('*')
+      .eq('redaction_id', redactionId)
+      .order('composite_confidence', { ascending: false })
+
+    if (error) {
+      throw new Error(`Proposals query failed: ${error.message}`)
+    }
+
+    return success(proposals || [])
+  } catch (err) {
+    return handleApiError(err)
+  }
+}
+
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     // Auth required

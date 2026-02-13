@@ -39,13 +39,6 @@ export async function GET(request: NextRequest) {
       throw new Error(`Notifications query failed: ${error.message}`)
     }
 
-    // Get unread count
-    const { count: unreadCount } = await supabase
-      .from('notifications')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('is_read', false)
-
     return paginated(notifications || [], pagination.page, pagination.per_page, count || 0)
   } catch (err) {
     return handleApiError(err)
@@ -66,19 +59,19 @@ export async function PUT(request: NextRequest) {
     const supabase = await createClient()
 
     if (markAll) {
-      // Mark all as read
-      await supabase
+      const { error: updateError } = await supabase
         .from('notifications')
         .update({ is_read: true })
         .eq('user_id', user.id)
         .eq('is_read', false)
+      if (updateError) throw new Error(`Failed to mark all as read: ${updateError.message}`)
     } else if (notificationIds && notificationIds.length > 0) {
-      // Mark specific notifications as read
-      await supabase
+      const { error: updateError } = await supabase
         .from('notifications')
         .update({ is_read: true })
         .eq('user_id', user.id)
         .in('id', notificationIds)
+      if (updateError) throw new Error(`Failed to mark notifications as read: ${updateError.message}`)
     }
 
     return success({ marked_read: true })

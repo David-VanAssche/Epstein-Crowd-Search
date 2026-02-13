@@ -46,6 +46,7 @@ export interface ChatStreamEvent {
   content?: string
   citation?: Citation
   tool_call?: ToolCall
+  conversation_id?: string
   error?: string
 }
 

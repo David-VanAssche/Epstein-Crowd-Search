@@ -17,6 +17,7 @@ import {
   LogOut,
   User,
   Bell,
+  Bookmark,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
@@ -120,7 +121,7 @@ export function Header() {
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/bookmarks" className="flex items-center gap-2">
-                    <Bell className="h-4 w-4" />
+                    <Bookmark className="h-4 w-4" />
                     Bookmarks
                   </Link>
                 </DropdownMenuItem>

@@ -25,7 +25,7 @@ export function useRedactionStats() {
 export function useRedactionProposals(redactionId: string) {
   return useQuery({
     queryKey: ['redaction', redactionId, 'proposals'],
-    queryFn: () => fetchApi<RedactionProposal[]>(`/api/redactions?redaction_id=${redactionId}`),
+    queryFn: () => fetchApi<RedactionProposal[]>(`/api/redaction/${redactionId}/propose`),
     enabled: !!redactionId,
   })
 }

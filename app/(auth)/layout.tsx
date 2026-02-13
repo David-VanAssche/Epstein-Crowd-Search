@@ -1,6 +1,14 @@
 // app/(auth)/layout.tsx
-import { AuthGuard } from '@/components/shared/AuthGuard'
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
 
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  return <AuthGuard>{children}</AuthGuard>
+export default async function AuthLayout({ children }: { children: React.ReactNode }) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  return <>{children}</>
 }

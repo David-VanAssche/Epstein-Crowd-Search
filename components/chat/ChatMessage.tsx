@@ -3,6 +3,7 @@
 
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeSanitize from 'rehype-sanitize'
 import { User, Bot } from 'lucide-react'
 import { CitationCard } from './CitationCard'
 import type { ChatMessage as ChatMessageType } from '@/types/chat'
@@ -39,7 +40,17 @@ export function ChatMessage({ message }: ChatMessageProps) {
             <p>{message.content}</p>
           ) : (
             <div className="prose prose-sm prose-invert max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeSanitize]}
+                components={{
+                  a: ({ href, children }) => (
+                    <a href={href} target="_blank" rel="noopener noreferrer">
+                      {children}
+                    </a>
+                  ),
+                }}
+              >
                 {message.content || '...'}
               </ReactMarkdown>
             </div>

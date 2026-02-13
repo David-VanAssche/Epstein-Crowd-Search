@@ -2,7 +2,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,7 +18,15 @@ function LoginPageContent() {
   const [loading, setLoading] = useState(false)
   const { signInWithOAuth, signInWithEmail } = useAuth()
   const searchParams = useSearchParams()
-  const authError = searchParams.get('error')
+  const authErrorCode = searchParams.get('error')
+  const AUTH_ERROR_MESSAGES: Record<string, string> = {
+    auth_failed: 'Authentication failed. Please try again.',
+    no_code: 'No authorization code was provided.',
+    callback_error: 'An error occurred during the authentication callback.',
+  }
+  const authErrorMessage = authErrorCode
+    ? (AUTH_ERROR_MESSAGES[authErrorCode] ?? 'An error occurred during authentication.')
+    : null
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -52,9 +60,9 @@ function LoginPageContent() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {(error || authError) && (
+          {(error || authErrorMessage) && (
             <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
-              {error || (authError === 'auth_failed' ? 'Authentication failed. Please try again.' : authError)}
+              {error || authErrorMessage}
             </div>
           )}
 

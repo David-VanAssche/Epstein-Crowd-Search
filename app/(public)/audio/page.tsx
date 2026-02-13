@@ -7,7 +7,6 @@ import { AudioPlayer } from '@/components/browse/AudioPlayer'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { fetchPaginated } from '@/lib/api/client'
-import { useAudio } from '@/lib/hooks/useAudio'
 
 interface AudioFileItem {
   id: string
@@ -19,8 +18,6 @@ interface AudioFileItem {
 }
 
 export default function AudioPage() {
-  const audio = useAudio()
-
   const { data, isLoading } = useQuery({
     queryKey: ['audio-files'],
     queryFn: () => fetchPaginated<AudioFileItem>('/api/audio?per_page=50'),
