@@ -44,6 +44,11 @@ Thumbs.db
 # Data (downloaded datasets)
 data/
 
+# Test results
+/test-results/
+/playwright-report/
+/blob-report/
+
 # Local tooling
 .claude/
 mcp-servers/
