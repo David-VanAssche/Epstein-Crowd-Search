@@ -2,6 +2,7 @@
 'use client'
 
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { DonationCTA } from '@/components/funding/DonationCTA'
 
 interface Chunk {
   id: string
@@ -41,6 +42,12 @@ export function DocumentViewer({ chunks }: DocumentViewerProps) {
             </p>
           </div>
         ))}
+        <div className="mt-8 border-t border-border pt-6">
+          <p className="mb-4 text-center text-sm text-muted-foreground">
+            This document was made searchable thanks to community funding.
+          </p>
+          <DonationCTA variant="bar" />
+        </div>
       </div>
     </ScrollArea>
   )

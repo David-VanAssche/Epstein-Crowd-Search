@@ -4,6 +4,7 @@ import { SearchBar } from '@/components/search/SearchBar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { DonationCTA } from '@/components/funding/DonationCTA'
 import type { CorpusStats } from '@/types/collaboration'
 
 export const dynamic = 'force-dynamic'
@@ -70,6 +71,11 @@ export default async function HomePage() {
             </Link>
           ))}
         </div>
+      </section>
+
+      {/* Compact Funding Bar */}
+      <section className="mx-auto max-w-4xl px-4">
+        <DonationCTA variant="bar" />
       </section>
 
       {/* How It Works */}

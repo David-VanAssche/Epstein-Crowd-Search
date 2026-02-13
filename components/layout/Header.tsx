@@ -32,6 +32,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown'
+import { DonationCTA } from '@/components/funding/DonationCTA'
 
 const navItems = [
   { href: '/search', label: 'Search', icon: Search },
@@ -51,18 +52,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      {/* Funding banner */}
-      <div className="bg-primary/10 border-b border-primary/20 px-4 py-1.5 text-center text-sm text-primary">
-        <span className="text-muted-foreground">0% of documents processed.</span>{' '}
-        <a
-          href="https://www.gofundme.com/f/the-epstein-archive"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline hover:text-primary/80"
-        >
-          Help unlock the truth &rarr;
-        </a>
-      </div>
+      <DonationCTA variant="banner" />
 
       <div className="container flex h-14 max-w-content items-center">
         {/* Logo */}
