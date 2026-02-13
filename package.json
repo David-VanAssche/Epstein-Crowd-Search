@@ -9,7 +9,16 @@
     "lint": "next lint",
     "test": "vitest",
     "test:run": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "batch:embed": "tsx scripts/batch/embed-chunks.ts",
+    "batch:entities": "tsx scripts/batch/extract-entities.ts",
+    "batch:classify": "tsx scripts/batch/classify-docs.ts",
+    "batch:redactions": "tsx scripts/batch/detect-redactions.ts",
+    "batch:timeline": "tsx scripts/batch/extract-timeline.ts",
+    "batch:summarize": "tsx scripts/batch/generate-summaries.ts",
+    "batch:criminal": "tsx scripts/batch/score-criminal.ts",
+    "batch:media": "tsx scripts/batch/process-media.ts",
+    "batch:all": "tsx scripts/batch/run-all.ts"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",
@@ -39,6 +48,7 @@
     "d3": "^7.9.0",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.34.0",
+    "lru-cache": "^11.2.6",
     "lucide-react": "^0.563.0",
     "next": "^14.2.35",
     "react": "^19.2.4",
@@ -71,6 +81,7 @@
     "supabase": "^2.76.8",
     "tailwindcss": "^3.4.19",
     "tailwindcss-animate": "^1.0.7",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }
