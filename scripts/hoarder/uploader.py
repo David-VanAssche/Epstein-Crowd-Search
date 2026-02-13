@@ -176,8 +176,12 @@ def upload_directory(client: Client, local_dir: str, remote_prefix: str,
         return stats
 
     # Auto-reduce workers for large files to avoid OOM on small VMs
+    # Set CONCURRENT_UPLOADS high (e.g. 60) on beefy VMs to override
     avg_file_size = sum(sz for _, _, sz in to_upload) / max(len(to_upload), 1)
-    if avg_file_size > 5 * 1024 * 1024:  # avg > 5MB
+    available_ram_gb = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / (1024**3)
+    if available_ram_gb >= 32:
+        workers = CONCURRENT_UPLOADS  # plenty of RAM, no throttling
+    elif avg_file_size > 5 * 1024 * 1024:  # avg > 5MB
         workers = min(CONCURRENT_UPLOADS, 3)
     elif avg_file_size > 1 * 1024 * 1024:  # avg > 1MB
         workers = min(CONCURRENT_UPLOADS, 8)
