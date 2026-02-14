@@ -14,8 +14,9 @@ test.describe('404 Not Found', () => {
 
   test('has link back to home', async ({ page }) => {
     await page.goto('/nonexistent-page-12345')
-    const link = page.locator('a[href="/"], a:has-text("home"), a:has-text("back")')
-    await expect(link.first()).toBeVisible()
+    // 404 page has a "Go Home" button linking to /
+    const link = page.getByRole('link', { name: /go home/i })
+    await expect(link).toBeVisible()
   })
 
   test('page title is set on not-found page', async ({ page }) => {

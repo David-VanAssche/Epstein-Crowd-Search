@@ -18,6 +18,7 @@ export enum PipelineStage {
   FINANCIAL_EXTRACT = 'financial_extract',
   CO_FLIGHT_LINKS = 'co_flight_links',
   NETWORK_METRICS = 'network_metrics',
+  RISK_SCORE = 'risk_score',
 }
 
 export interface StageDefinition {
@@ -179,6 +180,15 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     idempotent: true,
     maxRetries: 2,
   },
+  {
+    stage: PipelineStage.RISK_SCORE,
+    label: 'Entity Risk Scoring',
+    description: 'Compute per-entity risk scores from evidence weights, relationships, and criminal indicators',
+    dependsOn: [PipelineStage.CRIMINAL_INDICATORS, PipelineStage.NETWORK_METRICS],
+    estimatedCostPerPage: 0.0,
+    idempotent: true,
+    maxRetries: 2,
+  },
 ]
 
 /**
@@ -247,6 +257,7 @@ export function stageToStatus(stage: PipelineStage): ProcessingStatus {
     [PipelineStage.FINANCIAL_EXTRACT]: PROCESSING_STATUS.ENTITY_EXTRACTION,
     [PipelineStage.CO_FLIGHT_LINKS]: PROCESSING_STATUS.COMPLETE,
     [PipelineStage.NETWORK_METRICS]: PROCESSING_STATUS.COMPLETE,
+    [PipelineStage.RISK_SCORE]: PROCESSING_STATUS.COMPLETE,
   }
   return map[stage]
 }

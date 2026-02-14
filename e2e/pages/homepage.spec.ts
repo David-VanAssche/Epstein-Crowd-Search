@@ -9,21 +9,25 @@ test.describe('Homepage', () => {
 
   test('has search input', async ({ page }) => {
     await page.goto('/')
-    const searchInput = page.locator('input[type="search"], input[placeholder*="search" i], input[name="q"]')
-    await expect(searchInput.first()).toBeVisible()
+    // SearchBar uses aria-label="Search documents" on the input
+    const searchInput = page.locator('input[aria-label="Search documents"]')
+    await expect(searchInput).toBeVisible()
   })
 
-  test('has navigation links', async ({ page }) => {
+  test('has navigation links in sidebar', async ({ page }) => {
+    // Desktop viewport needed — on mobile the sidebar Sheet unmounts content when closed
+    await page.setViewportSize({ width: 1280, height: 800 })
     await page.goto('/')
-    const navLinks = page.locator('header a, nav a')
-    const count = await navLinks.count()
-    expect(count).toBeGreaterThan(1)
+    // Navigation is in the sidebar, not the header
+    const navLinks = page.locator('[data-sidebar="menu-button"]')
+    expect(await navLinks.count()).toBeGreaterThan(5)
   })
 
-  test('hero section visible', async ({ page }) => {
+  test('command center visible', async ({ page }) => {
     await page.goto('/')
-    const heading = page.locator('h1').first()
-    await expect(heading).toBeVisible()
+    // Homepage renders CommandCenter with a search bar form and stat counters
+    const searchForm = page.locator('form[role="search"]')
+    await expect(searchForm).toBeVisible()
   })
 
   test('stats section visible', async ({ page }) => {
@@ -36,16 +40,17 @@ test.describe('Homepage', () => {
 
   test('has call to action', async ({ page }) => {
     await page.goto('/')
-    const cta = page.locator('a, button').filter({ hasText: /search|explore|start|get started/i })
-    const count = await cta.count()
-    expect(count).toBeGreaterThan(0)
+    // The search bar has a Search submit button
+    const cta = page.locator('form[role="search"] button[type="submit"]')
+    await expect(cta).toBeVisible()
   })
 
   test('responsive: mobile shows content', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 })
     await page.goto('/')
-    const h1 = page.locator('h1').first()
-    await expect(h1).toBeVisible()
+    // Search bar should be visible on mobile
+    const searchForm = page.locator('form[role="search"]')
+    await expect(searchForm).toBeVisible()
   })
 
   test('no crash on load', async ({ page }) => {

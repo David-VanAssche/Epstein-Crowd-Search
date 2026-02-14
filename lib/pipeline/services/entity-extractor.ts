@@ -4,6 +4,8 @@
 // Deduplicates against existing entities by name matching.
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { normalizeEntityName } from '@/lib/utils/normalize-entity-name'
+import { isJunkEntity } from '@/lib/utils/junk-entity-filter'
 
 const ENTITY_TYPES = [
   'person',
@@ -119,23 +121,31 @@ Be thorough — extract ALL entities mentioned including people, organizations, 
 
 /**
  * Find or create an entity in the database.
- * Matches by exact name + type first.
+ * Matches by normalized name + type for dedup-safe lookups.
+ * Returns null if the entity is a known false positive (junk).
  */
 async function findOrCreateEntity(
   entity: ExtractedEntity,
   supabase: SupabaseClient
-): Promise<string> {
-  // Try exact match first
+): Promise<string | null> {
+  // Filter junk entities before creating
+  if (isJunkEntity(entity.name)) return null
+
+  const normalized = normalizeEntityName(entity.name)
+  if (!normalized || normalized.length <= 1) return null
+
+  // Match by normalized name + type (dedup-safe)
+  // Use maybeSingle() — returns null if no match (single() throws on 0 rows)
   const { data: existing } = await supabase
     .from('entities')
     .select('id, aliases, mention_count')
-    .eq('name', entity.name)
+    .eq('name_normalized', normalized)
     .eq('entity_type', entity.type)
-    .single()
+    .maybeSingle()
 
   if (existing) {
     // Merge aliases
-    const allAliases = new Set([...((existing as any).aliases || []), ...entity.aliases])
+    const allAliases = new Set([...((existing as any).aliases || []), ...(entity.aliases || [])])
     await supabase
       .from('entities')
       .update({
@@ -148,11 +158,12 @@ async function findOrCreateEntity(
     return (existing as any).id
   }
 
-  // Create new entity
+  // Create new entity with name_normalized
   const { data: created, error } = await supabase
     .from('entities')
     .insert({
       name: entity.name,
+      name_normalized: normalized,
       entity_type: entity.type,
       aliases: entity.aliases,
       mention_count: 1,
@@ -220,21 +231,31 @@ export async function handleEntityExtract(
       )
 
       for (const entity of extracted.entities) {
-        if (entity.confidence < 0.5) continue // Skip low-confidence
+        // Clamp confidence to [0, 1] and skip low-confidence
+        entity.confidence = Math.max(0, Math.min(1, entity.confidence ?? 0))
+        if (entity.confidence < 0.5) continue
 
         const entityId = await findOrCreateEntity(entity, supabase)
+        if (!entityId) continue // Junk entity filtered
         documentEntityIds.add(entityId)
 
-        // Create entity_mention
+        // Compute evidence weight: doc_probative × mention_type × confidence
+        const mentionType = 'direct'
+        const docWeight = getDocumentProbativeWeight(documentType)
+        const mentionWeight = getMentionTypeWeight(mentionType)
+        const evidenceWeight = docWeight * mentionWeight * entity.confidence
+
+        // Create entity_mention with evidence weight
         const { error: mentionError } = await supabase.from('entity_mentions').insert({
           entity_id: entityId,
           chunk_id: (chunk as any).id,
           document_id: documentId,
           mention_text: entity.mentionText,
           context_snippet: entity.contextSnippet,
-          mention_type: 'direct',
+          mention_type: mentionType,
           confidence: entity.confidence,
           page_number: (chunk as any).page_number,
+          evidence_weight: evidenceWeight,
         })
 
         if (!mentionError) totalMentions++
@@ -248,15 +269,67 @@ export async function handleEntityExtract(
     }
   }
 
-  // Update document_count on affected entities
+  // Increment document_count on affected entities (this document is new for them)
   for (const entityId of documentEntityIds) {
+    const { data: ent } = await supabase
+      .from('entities')
+      .select('document_count')
+      .eq('id', entityId)
+      .single()
     await supabase
       .from('entities')
-      .update({ document_count: documentEntityIds.size })
+      .update({ document_count: ((ent as any)?.document_count || 0) + 1 })
       .eq('id', entityId)
   }
 
   console.log(
     `[EntityExtract] Document ${documentId}: extracted ${totalEntities} entities, ${totalMentions} mentions`
   )
+}
+
+// --- Evidence weight helpers (mirrors SQL functions) ---
+
+function getDocumentProbativeWeight(classification: string): number {
+  switch (classification?.toLowerCase()) {
+    // Tier 1: Sworn testimony
+    case 'deposition':
+    case 'grand_jury_testimony':
+    case 'witness_statement':
+      return 1.0
+    // Tier 2: Official documents
+    case 'court_filing':
+    case 'police_report':
+    case 'fbi_report':
+      return 0.7
+    // Tier 3: Records
+    case 'flight_log':
+    case 'financial_record':
+    case 'phone_record':
+    case 'medical_record':
+      return 0.4
+    // Tier 4: Informal
+    case 'correspondence':
+    case 'property_record':
+      return 0.2
+    // Tier 5: Peripheral
+    case 'address_book':
+    case 'photograph':
+    case 'news_clipping':
+    default:
+      return 0.1
+  }
+}
+
+function getMentionTypeWeight(mentionType: string): number {
+  switch (mentionType?.toLowerCase()) {
+    case 'direct':
+      return 1.0
+    case 'indirect':
+      return 0.5
+    case 'implied':
+      return 0.3
+    case 'co_occurrence':
+    default:
+      return 0.15
+  }
 }

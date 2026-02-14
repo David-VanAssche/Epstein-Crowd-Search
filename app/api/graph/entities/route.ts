@@ -36,9 +36,8 @@ export async function GET(request: NextRequest) {
       if (error) throw new Error(`Graph query failed: ${error.message}`)
 
       const rawNodes = (graphData as any[]) || []
-      const nodeIds = new Set(rawNodes.map((n) => n.entity_id))
 
-      // Fetch inter-relationships
+      // Build graph response
       const nodes = rawNodes.map((n) => ({
         id: n.entity_id,
         name: n.entity_name,
@@ -68,7 +67,7 @@ export async function GET(request: NextRequest) {
     // Top N entities by mention count
     const { data: topEntities, error: entityError } = await supabase
       .from('entities')
-      .select('id, name, entity_type, mention_count, document_count')
+      .select('id, name, entity_type, mention_count, document_count, risk_score')
       .order('mention_count', { ascending: false })
       .limit(input.limit)
 
@@ -96,6 +95,7 @@ export async function GET(request: NextRequest) {
       mentionCount: e.mention_count || 0,
       connectionCount: 0,
       documentCount: e.document_count || 0,
+      criminalIndicatorScore: (e.risk_score || 0) * 2, // 0-5 → 0-10 scale for graph
     }))
 
     const edges = (relationships || [])
