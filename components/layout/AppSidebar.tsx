@@ -23,6 +23,7 @@ import {
   Activity,
   BookUser,
   Scale,
+  Workflow,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -78,6 +79,7 @@ const NAV_GROUPS = [
     items: [
       { href: '/timeline', label: 'Timeline', icon: Clock },
       { href: '/analysis', label: 'Analysis', icon: BarChart3 },
+      { href: '/pipeline', label: 'Pipeline', icon: Workflow },
       { href: '/stats', label: 'Stats', icon: Activity },
       { href: '/prosecutors', label: 'Prosecutors', icon: Scale },
     ],

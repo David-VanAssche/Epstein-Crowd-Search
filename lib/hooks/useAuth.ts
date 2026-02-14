@@ -54,11 +54,23 @@ export function useAuth() {
     router.refresh()
   }, [supabase, router])
 
+  const signUpWithEmail = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
+      },
+    })
+    if (error) throw error
+  }, [supabase])
+
   return {
     user,
     isLoading,
     signOut,
     signInWithOAuth,
     signInWithEmail,
+    signUpWithEmail,
   }
 }

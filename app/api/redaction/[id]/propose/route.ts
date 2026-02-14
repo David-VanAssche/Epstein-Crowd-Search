@@ -87,12 +87,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       throw new Error(`Failed to create proposal: ${insertError.message}`)
     }
 
-    // Update the redaction status to 'proposed' if it was 'unsolved'
+    // Update the redaction status to 'proposed' if it was 'unsolved' (via SECURITY DEFINER)
     if (redaction.status === 'unsolved') {
-      await supabase
-        .from('redactions')
-        .update({ status: 'proposed', updated_at: new Date().toISOString() })
-        .eq('id', redactionId)
+      await supabase.rpc('transition_redaction_status', {
+        p_redaction_id: redactionId,
+        p_new_status: 'proposed',
+        p_allowed_from: ['unsolved'],
+      })
     }
 
     // Calculate the composite confidence score

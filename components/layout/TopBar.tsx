@@ -98,12 +98,19 @@ export function TopBar() {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : !authLoading ? (
-          <Link href="/login">
-            <Button variant="ghost" size="sm" className="gap-1.5">
-              <LogIn className="h-4 w-4" />
-              <span className="hidden sm:inline">Sign In</span>
-            </Button>
-          </Link>
+          <div className="flex items-center gap-1">
+            <Link href="/login">
+              <Button variant="ghost" size="sm" className="gap-1.5">
+                <LogIn className="h-4 w-4" />
+                <span className="hidden sm:inline">Sign In</span>
+              </Button>
+            </Link>
+            <Link href="/login?view=signup">
+              <Button size="sm" className="hidden sm:inline-flex">
+                Sign Up
+              </Button>
+            </Link>
+          </div>
         ) : null}
       </div>
     </header>

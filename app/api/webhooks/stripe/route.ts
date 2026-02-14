@@ -63,12 +63,17 @@ export async function POST(request: NextRequest) {
       // Find the contribution by payment intent
       const { data: contribution } = await supabase
         .from('contributions')
-        .select('id, campaign_id, amount_cents')
+        .select('id, campaign_id, amount_cents, status')
         .eq('stripe_payment_intent_id', paymentIntentId)
         .single()
 
       if (contribution) {
-        // Mark as refunded
+        // Idempotency: skip if already refunded
+        if (contribution.status === 'refunded') {
+          return NextResponse.json({ received: true })
+        }
+
+        // Mark as refunded FIRST
         await supabase
           .from('contributions')
           .update({
@@ -77,16 +82,27 @@ export async function POST(request: NextRequest) {
           })
           .eq('id', contribution.id)
 
-        // Decrement campaign funded_amount
+        // Decrement campaign funded_amount directly (allocate_contribution
+        // won't work here because it requires status='paid', which we just
+        // changed to 'refunded')
         if (contribution.campaign_id) {
-          await supabase.rpc('allocate_contribution', {
-            p_contribution_id: contribution.id,
-          })
-          // Re-aggregate since the contribution is now refunded (excluded from SUM)
-          await supabase.rpc('recompute_funding_status')
+          const { data: campaign } = await supabase
+            .from('processing_campaigns')
+            .select('funded_amount')
+            .eq('id', contribution.campaign_id)
+            .single()
+
+          if (campaign) {
+            await supabase
+              .from('processing_campaigns')
+              .update({
+                funded_amount: Math.max(0, (campaign.funded_amount || 0) - contribution.amount_cents),
+              })
+              .eq('id', contribution.campaign_id)
+          }
         }
 
-        // Recompute global funding status
+        // Recompute global funding status from all paid contributions
         await supabase.rpc('recompute_funding_status')
       }
     }

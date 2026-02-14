@@ -83,8 +83,11 @@ export function useVoteOnProposal() {
         body: JSON.stringify({ proposal_id: proposalId, vote_type: voteType }),
       })
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['redactions'] })
+      queryClient.invalidateQueries({
+        queryKey: ['redaction', variables.redactionId, 'proposals'],
+      })
     },
   })
 }

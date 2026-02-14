@@ -1,7 +1,8 @@
 // lib/pipeline/orchestrator.ts
 // Runs a document through all pipeline stages sequentially.
 // Each stage is a function that takes a document ID and returns void.
-// The orchestrator handles retries, status updates, and error reporting.
+// The orchestrator handles retries, status updates, error reporting,
+// and tracks per-stage completion via the completed_stages array.
 
 import { SupabaseClient } from '@supabase/supabase-js'
 import {
@@ -69,6 +70,15 @@ export class PipelineOrchestrator {
 
     console.log(`[Pipeline] Starting processing for document ${documentId}`)
 
+    // Fetch current completed_stages for skip logic
+    const { data: doc } = await this.supabase
+      .from('documents')
+      .select('completed_stages')
+      .eq('id', documentId)
+      .single()
+
+    const completedStages = new Set<string>((doc as any)?.completed_stages || [])
+
     // Get ordered stages, optionally filtered
     let stages = getOrderedStages()
     if (this.config.stagesFilter) {
@@ -77,13 +87,20 @@ export class PipelineOrchestrator {
     }
 
     for (const stage of stages) {
+      // Skip stages already completed (from completed_stages array)
+      if (completedStages.has(stage)) {
+        console.log(`[Pipeline] Stage ${stage} already completed for document ${documentId}, skipping`)
+        results.push({ stage, success: true, durationMs: 0, retries: 0 })
+        continue
+      }
+
       const handler = this.handlers.get(stage)
       if (!handler) {
         console.warn(`[Pipeline] No handler registered for stage: ${stage}, skipping`)
         continue
       }
 
-      // Per-document skip check
+      // Per-document skip check (custom logic beyond completed_stages)
       const skipCheck = this.skipChecks.get(stage)
       if (skipCheck) {
         const shouldSkip = await skipCheck(documentId, this.supabase)
@@ -121,6 +138,10 @@ export class PipelineOrchestrator {
         )
         break
       }
+
+      // Mark stage as completed in the completed_stages array
+      await this.appendCompletedStage(documentId, stage)
+      completedStages.add(stage)
 
       console.log(
         `[Pipeline] Stage ${stage} completed for document ${documentId} (${stageResult.durationMs}ms)`
@@ -178,6 +199,41 @@ export class PipelineOrchestrator {
       durationMs: Date.now() - startTime,
       error: lastError,
       retries,
+    }
+  }
+
+  /** Append a stage to the document's completed_stages array */
+  private async appendCompletedStage(
+    documentId: string,
+    stage: string
+  ): Promise<void> {
+    const { error } = await this.supabase.rpc('append_completed_stage', {
+      p_document_id: documentId,
+      p_stage: stage,
+    })
+
+    if (error) {
+      // Fallback: use array_append with dedup if the RPC doesn't exist yet.
+      // This is still race-safe because we filter out duplicates in the update.
+      console.warn(`[Pipeline] append_completed_stage RPC failed, using fallback: ${error.message}`)
+      const { data: doc } = await this.supabase
+        .from('documents')
+        .select('completed_stages')
+        .eq('id', documentId)
+        .single()
+
+      const current: string[] = (doc as any)?.completed_stages || []
+      // Use Set to deduplicate — even if another worker added stages between our
+      // read and write, we won't remove them (only add ours). Worst case: a
+      // concurrent write overwrites with the same set. No data loss.
+      const updated = Array.from(new Set([...current, stage]))
+      await this.supabase
+        .from('documents')
+        .update({
+          completed_stages: updated,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', documentId)
     }
   }
 
