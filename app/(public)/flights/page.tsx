@@ -4,7 +4,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { FlightLogTable } from '@/components/browse/FlightLogTable'
 import { FlightLogFilters } from '@/components/browse/FlightLogFilters'
-import { EmptyState } from '@/components/shared/EmptyState'
+import { ProcessingFundingCard } from '@/components/funding/ProcessingFundingCard'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { fetchPaginated } from '@/lib/api/client'
 
@@ -43,12 +43,7 @@ export default function FlightsPage() {
           <FlightLogTable flights={flights} />
         </>
       ) : (
-        <EmptyState
-          variant="not-processed"
-          title="Flight Log Explorer"
-          description="Flight manifest data will appear here once the flight log documents are processed and structured data is extracted. Known logs include records from aircraft N908JE and others."
-          showFundingCTA
-        />
+        <ProcessingFundingCard slug="flights" />
       )}
     </div>
   )

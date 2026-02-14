@@ -17,7 +17,6 @@ export function DonationCTA({ variant }: DonationCTAProps) {
   const raised = data?.raised ?? 0
   const goal = data?.goal ?? 16000
   const percentage = Math.min(data?.percentage ?? 0, 100)
-  const gofundmeUrl = process.env.NEXT_PUBLIC_GOFUNDME_URL || '#'
 
   // Banner starts hidden to prevent flash, then reads localStorage
   const [dismissed, setDismissed] = useState(variant === 'banner')
@@ -47,11 +46,11 @@ export function DonationCTA({ variant }: DonationCTAProps) {
         <span className="whitespace-nowrap text-sm text-muted-foreground">
           Your $5 processes 2,400 pages
         </span>
-        <a href={gofundmeUrl} target="_blank" rel="noopener noreferrer">
+        <Link href="/funding">
           <Button size="sm" variant="outline">
-            Donate
+            Fund Processing
           </Button>
-        </a>
+        </Link>
       </div>
     )
   }
@@ -72,9 +71,9 @@ export function DonationCTA({ variant }: DonationCTAProps) {
             <Button variant="outline" size="sm" asChild>
               <Link href="/funding">See Your Impact</Link>
             </Button>
-            <a href={gofundmeUrl} target="_blank" rel="noopener noreferrer">
-              <Button size="sm">Donate Now</Button>
-            </a>
+            <Button size="sm" asChild>
+              <Link href="/funding">Fund Processing</Link>
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -91,11 +90,11 @@ export function DonationCTA({ variant }: DonationCTAProps) {
         </span>
       </div>
       <div className="flex items-center gap-2">
-        <a href={gofundmeUrl} target="_blank" rel="noopener noreferrer">
+        <Link href="/funding">
           <Button size="sm" variant="outline">
-            Donate
+            Fund Processing
           </Button>
-        </a>
+        </Link>
         <Button
           size="sm"
           variant="ghost"

@@ -72,14 +72,10 @@ export function EmptyState({
       )}
       {showFundingCTA && (
         <Button asChild variant="outline" className="mt-2 gap-2">
-          <a
-            href="https://www.gofundme.com/f/the-epstein-archive"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+          <Link href="/funding">
             <Heart className="h-4 w-4" />
-            Help us process more &rarr;
-          </a>
+            Help fund processing &rarr;
+          </Link>
         </Button>
       )}
     </div>

@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { EntityCard } from '@/components/entity/EntityCard'
-import { EmptyState } from '@/components/shared/EmptyState'
+import { ProcessingFundingCard } from '@/components/funding/ProcessingFundingCard'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { fetchPaginated } from '@/lib/api/client'
 import type { EntityType } from '@/types/entities'
@@ -81,12 +81,7 @@ export default function EntitiesPage() {
               ))}
             </div>
           ) : (
-            <EmptyState
-              variant="not-processed"
-              title="No Entities Yet"
-              description="Entities are extracted automatically as documents are processed. Help fund processing to discover the people, organizations, locations, aircraft, vessels, properties, and accounts in the files."
-              showFundingCTA
-            />
+            <ProcessingFundingCard slug="entities" />
           )}
         </TabsContent>
       </Tabs>

@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic'
 import { Suspense, useState, useCallback, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { LoadingState } from '@/components/shared/LoadingState'
-import { EmptyState } from '@/components/shared/EmptyState'
+import { ProcessingFundingCard } from '@/components/funding/ProcessingFundingCard'
 import { GraphControls } from '@/components/graph/GraphControls'
 import { GraphTooltip } from '@/components/graph/GraphTooltip'
 import { PathFinder } from '@/components/graph/PathFinder'
@@ -122,12 +122,7 @@ export default function GraphPage() {
   if (nodes.length === 0) {
     return (
       <div className="flex min-h-[calc(100vh-var(--topbar-height))] items-center justify-center px-4">
-        <EmptyState
-          variant="not-processed"
-          title="Entity Relationship Graph"
-          description="The entity relationship graph will populate as documents are processed. Entities and their connections are extracted automatically during document analysis."
-          showFundingCTA
-        />
+        <ProcessingFundingCard slug="graph" className="max-w-lg" />
       </div>
     )
   }

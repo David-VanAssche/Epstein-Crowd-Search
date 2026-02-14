@@ -4,7 +4,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { AudioPlaylist } from '@/components/browse/AudioPlaylist'
 import { AudioPlayer } from '@/components/browse/AudioPlayer'
-import { EmptyState } from '@/components/shared/EmptyState'
+import { ProcessingFundingCard } from '@/components/funding/ProcessingFundingCard'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { fetchPaginated } from '@/lib/api/client'
 
@@ -45,12 +45,7 @@ export default function AudioPage() {
           </div>
         </div>
       ) : (
-        <EmptyState
-          variant="not-processed"
-          title="Audio Archive"
-          description="Audio files will appear here as they are transcribed and processed. This includes court recordings, depositions, and other audio evidence."
-          showFundingCTA
-        />
+        <ProcessingFundingCard slug="audio" />
       )}
     </div>
   )

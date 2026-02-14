@@ -32,7 +32,7 @@ export function FundingSidebarWidget() {
         <span className="text-sidebar-foreground/70">
           {percentage}% processed
         </span>
-        <span className="text-sidebar-primary font-medium">Donate</span>
+        <span className="text-sidebar-primary font-medium">Fund</span>
       </div>
       <Progress value={percentage} className="mt-1.5 h-1.5" />
     </Link>

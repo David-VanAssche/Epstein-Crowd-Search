@@ -7,6 +7,7 @@ import { EmailFilters } from '@/components/email/EmailFilters'
 import { EmailList } from '@/components/email/EmailList'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { ProcessingFundingCard } from '@/components/funding/ProcessingFundingCard'
 import { useEmails, type EmailFiltersState } from '@/lib/hooks/useEmails'
 import { ChevronLeft, ChevronRight, Mail } from 'lucide-react'
 
@@ -39,16 +40,16 @@ export default function EmailsPage() {
         {isLoading ? (
           <LoadingState variant="list" count={8} />
         ) : emails.length === 0 ? (
-          <EmptyState
-            variant="not-processed"
-            icon={Mail}
-            title="No Emails Found"
-            description={
-              filters.search || filters.entityId || filters.dateFrom
-                ? 'No emails match your current filters. Try adjusting your search criteria.'
-                : 'Email extraction from documents is in progress. Emails will appear here as documents are processed.'
-            }
-          />
+          filters.search || filters.entityId || filters.dateFrom ? (
+            <EmptyState
+              variant="no-results"
+              icon={Mail}
+              title="No Emails Found"
+              description="No emails match your current filters. Try adjusting your search criteria."
+            />
+          ) : (
+            <ProcessingFundingCard slug="emails" />
+          )
         ) : (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">

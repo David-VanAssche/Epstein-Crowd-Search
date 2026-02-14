@@ -3,7 +3,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { PhotoGallery } from '@/components/browse/PhotoGallery'
-import { EmptyState } from '@/components/shared/EmptyState'
+import { ProcessingFundingCard } from '@/components/funding/ProcessingFundingCard'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { fetchPaginated } from '@/lib/api/client'
 
@@ -34,12 +34,7 @@ export default function PhotosPage() {
       ) : images.length > 0 ? (
         <PhotoGallery images={images} />
       ) : (
-        <EmptyState
-          variant="not-processed"
-          title="Photo Gallery"
-          description="Photos will appear here as documents are processed. The archive contains thousands of images including surveillance photos, party photos, property images, and more."
-          showFundingCTA
-        />
+        <ProcessingFundingCard slug="photos" />
       )}
     </div>
   )

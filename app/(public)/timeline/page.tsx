@@ -4,7 +4,7 @@
 import { useState, useMemo } from 'react'
 import { TimelineView } from '@/components/timeline/TimelineView'
 import { TimelineFilters } from '@/components/timeline/TimelineFilters'
-import { EmptyState } from '@/components/shared/EmptyState'
+import { ProcessingFundingCard } from '@/components/funding/ProcessingFundingCard'
 import type { TimelineEvent } from '@/types/timeline'
 
 interface TimelineFilterState {
@@ -62,12 +62,7 @@ export default function TimelinePage() {
       {filteredEvents.length > 0 ? (
         <TimelineView events={filteredEvents} />
       ) : (
-        <EmptyState
-          variant="not-processed"
-          title="Timeline View"
-          description="Timeline events will appear here as documents are processed. Events are extracted from dates, meetings, travel records, legal proceedings, and other temporal data in the corpus."
-          showFundingCTA
-        />
+        <ProcessingFundingCard slug="timeline" />
       )}
     </div>
   )

@@ -22,11 +22,32 @@ const ENTITIES_PER_PAGE = 2.5
 
 export function DonationImpactCalc() {
   const [sliderValue, setSliderValue] = useState([amountToSlider(25)])
+  const [isLoading, setIsLoading] = useState(false)
   const amount = useMemo(() => sliderToAmount(sliderValue[0]), [sliderValue])
   const pages = Math.round(amount / COST_PER_PAGE)
   const entities = Math.round(pages * ENTITIES_PER_PAGE)
 
-  const gofundmeUrl = process.env.NEXT_PUBLIC_GOFUNDME_URL || '#'
+  async function handleCheckout() {
+    setIsLoading(true)
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaign_slug: 'general',
+          amount_cents: amount * 100,
+        }),
+      })
+      const data = await res.json()
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url
+      }
+    } catch {
+      // Silently fail — user can retry
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
     <Card className="border-border bg-surface">
@@ -87,16 +108,14 @@ export function DonationImpactCalc() {
           </p>
         </div>
 
-        <a
-          href={`${gofundmeUrl}?amount=${amount}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block"
+        <Button
+          size="lg"
+          className="w-full"
+          onClick={handleCheckout}
+          disabled={isLoading}
         >
-          <Button size="lg" className="w-full">
-            Donate ${amount} Now
-          </Button>
-        </a>
+          {isLoading ? 'Redirecting to checkout...' : `Fund $${amount} Now`}
+        </Button>
       </CardContent>
     </Card>
   )

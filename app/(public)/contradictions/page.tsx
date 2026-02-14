@@ -2,16 +2,14 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
 import { LoadingState } from '@/components/shared/LoadingState'
-import { EmptyState } from '@/components/shared/EmptyState'
+import { ProcessingFundingCard } from '@/components/funding/ProcessingFundingCard'
 import Link from 'next/link'
-import { AlertTriangle, CheckCircle, ThumbsUp, ThumbsDown, Plus, ChevronLeft, ChevronRight } from 'lucide-react'
+import { CheckCircle, ThumbsUp, ThumbsDown, Plus, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const SEVERITY_COLORS: Record<string, string> = {
   low: 'bg-blue-500/20 text-blue-400',
@@ -19,6 +17,45 @@ const SEVERITY_COLORS: Record<string, string> = {
   high: 'bg-orange-500/20 text-orange-400',
   critical: 'bg-red-500/20 text-red-400',
 }
+
+const SAMPLE_CONTRADICTIONS = [
+  {
+    id: 'sample-1',
+    severity: 'critical',
+    is_verified: true,
+    tags: ['testimony'],
+    claim_a: 'Virginia Giuffre stated she was recruited by Ghislaine Maxwell at Mar-a-Lago in 1999 when she was 16 years old.',
+    claim_b: 'Employment records from Mar-a-Lago indicate Giuffre was not employed at the resort until 2000.',
+    source_a: 'Giuffre v. Maxwell, Deposition Transcript p.32',
+    source_b: 'Mar-a-Lago Employment Records, Exhibit 14',
+    verify_count: 12,
+    dispute_count: 3,
+  },
+  {
+    id: 'sample-2',
+    severity: 'high',
+    is_verified: false,
+    tags: ['flight-logs', 'dates'],
+    claim_a: 'Flight logs show a trip from Teterboro to St. Thomas on March 11, 2002 with 6 passengers listed.',
+    claim_b: 'A separate manifest for the same date and route lists only 3 passengers with different names.',
+    source_a: 'FAA Flight Logs, Exhibit 9A',
+    source_b: 'Pilot Logbook, Exhibit 22',
+    verify_count: 7,
+    dispute_count: 1,
+  },
+  {
+    id: 'sample-3',
+    severity: 'medium',
+    is_verified: false,
+    tags: ['financial'],
+    claim_a: 'Bank records show a wire transfer of $500,000 from an offshore account in June 2004.',
+    claim_b: 'The same transaction appears in another filing as $350,000 received in July 2004.',
+    source_a: 'Deutsche Bank Subpoena Response, p.114',
+    source_b: 'USVI AG Filing, Exhibit B-7',
+    verify_count: 4,
+    dispute_count: 2,
+  },
+] as const
 
 interface ContradictionItem {
   id: string
@@ -108,11 +145,74 @@ export default function ContradictionsPage() {
       {isLoading ? (
         <LoadingState variant="page" />
       ) : contradictions.length === 0 ? (
-        <EmptyState
-          variant="not-processed"
-          title="No Contradictions Found"
-          description="Contradictions will appear as researchers identify conflicting claims across documents."
-        />
+        <div className="space-y-6">
+          <ProcessingFundingCard slug="contradictions" />
+          <div className="rounded-lg border border-dashed border-border bg-surface/50 p-4 text-center">
+            <p className="text-sm font-medium text-muted-foreground">
+              Below is a preview of what this page will look like once processing is complete.
+            </p>
+          </div>
+          <div className="space-y-4 opacity-60 pointer-events-none select-none" aria-hidden="true">
+            {SAMPLE_CONTRADICTIONS.map((c) => (
+              <Card key={c.id} className="border-border bg-surface">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Badge className={SEVERITY_COLORS[c.severity] || ''}>
+                          {c.severity}
+                        </Badge>
+                        {c.is_verified && (
+                          <Badge variant="outline" className="gap-1 text-green-400 border-green-400/30">
+                            <CheckCircle className="h-3 w-3" />
+                            Verified
+                          </Badge>
+                        )}
+                        {c.tags.map((tag) => (
+                          <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="rounded-lg border border-border bg-background p-3">
+                          <p className="mb-1 text-xs font-medium text-muted-foreground">Claim A</p>
+                          <p className="text-sm text-foreground line-clamp-3">{c.claim_a}</p>
+                          {c.source_a && (
+                            <p className="mt-1 text-xs text-blue-400">{c.source_a}</p>
+                          )}
+                        </div>
+                        <div className="rounded-lg border border-border bg-background p-3">
+                          <p className="mb-1 text-xs font-medium text-muted-foreground">Claim B</p>
+                          <p className="text-sm text-foreground line-clamp-3">{c.claim_b}</p>
+                          {c.source_b && (
+                            <p className="mt-1 text-xs text-blue-400">{c.source_b}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 text-xs">
+                      <div className="flex items-center gap-1 text-green-400">
+                        <ThumbsUp className="h-3.5 w-3.5" />
+                        {c.verify_count}
+                      </div>
+                      <div className="flex items-center gap-1 text-red-400">
+                        <ThumbsDown className="h-3.5 w-3.5" />
+                        {c.dispute_count}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="flex justify-center">
+            <Link href="/contribute">
+              <Button size="sm" className="gap-1.5">
+                <Plus className="h-4 w-4" />
+                Report the First Contradiction
+              </Button>
+            </Link>
+          </div>
+        </div>
       ) : (
         <div className="space-y-4">
           {contradictions.map((c) => (

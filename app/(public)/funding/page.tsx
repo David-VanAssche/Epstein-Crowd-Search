@@ -1,7 +1,7 @@
 // app/(public)/funding/page.tsx
 import { FundingTracker } from '@/components/funding/FundingTracker'
+import { CampaignProgressGrid } from '@/components/funding/CampaignProgressGrid'
 import { DonationImpactCalc } from '@/components/funding/DonationImpactCalc'
-import { DonationImpactTiers } from '@/components/funding/DonationImpactTiers'
 import { SpendTransparencyLog } from '@/components/funding/SpendTransparencyLog'
 import { ProcessingLiveFeed } from '@/components/funding/ProcessingLiveFeed'
 import { Separator } from '@/components/ui/separator'
@@ -29,18 +29,22 @@ export default function FundingPage() {
 
       <Separator className="my-8" />
 
+      {/* Campaign grid — replaces GoFundMe embed */}
+      <section className="mb-12">
+        <h2 className="mb-6 text-center text-2xl font-bold">Processing Campaigns</h2>
+        <p className="mb-8 text-center text-muted-foreground">
+          Fund specific features or support all processing at once. Click any campaign to contribute.
+        </p>
+        <CampaignProgressGrid />
+      </section>
+
+      <Separator className="my-8" />
+
       {/* Interactive calculator */}
       <section className="mb-12">
         <div className="mx-auto max-w-2xl">
           <DonationImpactCalc />
         </div>
-      </section>
-
-      <Separator className="my-8" />
-
-      {/* Impact tiers */}
-      <section className="mb-12">
-        <DonationImpactTiers />
       </section>
 
       <Separator className="my-8" />
@@ -56,32 +60,6 @@ export default function FundingPage() {
       </section>
 
       <Separator className="my-8" />
-
-      {/* GoFundMe embed */}
-      <section className="mb-12 text-center">
-        <h2 className="mb-4 text-2xl font-bold">Every Penny Accounted For</h2>
-        <p className="mb-6 text-muted-foreground">
-          We process documents using Gemini for entity extraction, Whisper for audio
-          transcription, and Supabase for storage. Cost: $2.10 per 1,000 pages.
-        </p>
-        <div className="mx-auto max-w-xl rounded-lg border border-border bg-surface p-8">
-          {/* GoFundMe widget embed placeholder.
-              To get the real widget URL:
-              1. Go to your GoFundMe campaign page
-              2. Click "Share" then "Embed"
-              3. Copy the iframe src URL
-              4. Replace the src below with the real URL
-          */}
-          <iframe
-            src="about:blank"
-            title="GoFundMe Donation Widget"
-            className="h-64 w-full rounded"
-          />
-          <p className="mt-4 text-xs text-muted-foreground">
-            GoFundMe widget will load here. Replace the iframe src with your campaign widget URL.
-          </p>
-        </div>
-      </section>
 
       {/* Spend category breakdown */}
       <section className="mb-12">

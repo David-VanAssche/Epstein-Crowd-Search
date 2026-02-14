@@ -10,6 +10,7 @@ import { FinancialSummary } from '@/components/finance/FinancialSummary'
 import { FinancialFlowDiagram } from '@/components/finance/FinancialFlowDiagram'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { ProcessingFundingCard } from '@/components/funding/ProcessingFundingCard'
 import { useFinancialTransactions, type FinancialFiltersState } from '@/lib/hooks/useFinancialTransactions'
 import { ChevronLeft, ChevronRight, DollarSign } from 'lucide-react'
 
@@ -49,16 +50,16 @@ export default function FinancesPage() {
           {isLoading ? (
             <LoadingState variant="list" count={8} />
           ) : transactions.length === 0 ? (
-            <EmptyState
-              variant="not-processed"
-              icon={DollarSign}
-              title="No Transactions Found"
-              description={
-                filters.transactionType || filters.minAmount !== null || filters.isSuspicious !== null
-                  ? 'No transactions match your current filters.'
-                  : 'Financial extraction from documents is in progress.'
-              }
-            />
+            filters.transactionType || filters.minAmount !== null || filters.isSuspicious !== null ? (
+              <EmptyState
+                variant="no-results"
+                icon={DollarSign}
+                title="No Transactions Found"
+                description="No transactions match your current filters."
+              />
+            ) : (
+              <ProcessingFundingCard slug="finances" />
+            )
           ) : (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">

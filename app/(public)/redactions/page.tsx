@@ -3,7 +3,7 @@
 
 import { RedactionStats } from '@/components/redaction/RedactionStats'
 import { SolvableRedactionCard } from '@/components/redaction/SolvableRedactionCard'
-import { EmptyState } from '@/components/shared/EmptyState'
+import { ProcessingFundingCard } from '@/components/funding/ProcessingFundingCard'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { useSolvableRedactions } from '@/lib/hooks/useRedaction'
 
@@ -32,12 +32,7 @@ export default function RedactionsPage() {
           ))}
         </div>
       ) : (
-        <EmptyState
-          variant="not-processed"
-          title="No Solvable Redactions Yet"
-          description="Solvable redactions will appear here once documents are processed and redactions are detected with surrounding context."
-          showFundingCTA
-        />
+        <ProcessingFundingCard slug="redactions" />
       )}
     </div>
   )

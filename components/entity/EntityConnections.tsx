@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic'
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { LoadingState } from '@/components/shared/LoadingState'
-import { EmptyState } from '@/components/shared/EmptyState'
+import { ProcessingFundingCard } from '@/components/funding/ProcessingFundingCard'
 import Link from 'next/link'
 import type { GraphNode, GraphEdge, GraphFilters } from '@/types/graph'
 import { ALL_ENTITY_TYPES } from '@/lib/constants/entity-types'
@@ -79,11 +79,7 @@ export function EntityConnections({ entityId, entityName }: EntityConnectionsPro
 
   if (nodes.length === 0) {
     return (
-      <EmptyState
-        variant="not-processed"
-        title="No Connections Yet"
-        description="Entity connections will appear as documents are processed and relationships are extracted."
-      />
+      <ProcessingFundingCard slug="entity-connections" variant="compact" />
     )
   }
 

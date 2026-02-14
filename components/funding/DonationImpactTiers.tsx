@@ -1,4 +1,7 @@
 // components/funding/DonationImpactTiers.tsx
+'use client'
+
+import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
@@ -16,7 +19,29 @@ const TIERS = [
 ]
 
 export function DonationImpactTiers() {
-  const gofundmeUrl = process.env.NEXT_PUBLIC_GOFUNDME_URL || '#'
+  const [loadingTier, setLoadingTier] = useState<number | null>(null)
+
+  async function handleCheckout(amount: number) {
+    setLoadingTier(amount)
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaign_slug: 'general',
+          amount_cents: amount * 100,
+        }),
+      })
+      const data = await res.json()
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url
+      }
+    } catch {
+      // Silently fail — user can retry
+    } finally {
+      setLoadingTier(null)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -44,16 +69,15 @@ export function DonationImpactTiers() {
                 <p className="mb-2 text-xs text-muted-foreground">{tier.description}</p>
                 <p className="text-xs italic text-muted-foreground">{tier.analogy}</p>
               </div>
-              <a
-                href={`${gofundmeUrl}?amount=${tier.amount}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 block"
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4 w-full"
+                onClick={() => handleCheckout(tier.amount)}
+                disabled={loadingTier === tier.amount}
               >
-                <Button variant="outline" size="sm" className="w-full">
-                  Donate ${tier.amount.toLocaleString()}
-                </Button>
-              </a>
+                {loadingTier === tier.amount ? 'Redirecting...' : `Fund $${tier.amount.toLocaleString()}`}
+              </Button>
             </CardContent>
           </Card>
         ))}

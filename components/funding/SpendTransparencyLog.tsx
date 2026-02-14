@@ -71,6 +71,9 @@ export function SpendTransparencyLog() {
                       <p className="text-xs text-muted-foreground">
                         {new Date(entry.created_at).toLocaleDateString()} &middot;{' '}
                         {entry.service}
+                        {(entry as any).campaign_name && (
+                          <> &middot; {(entry as any).campaign_name}</>
+                        )}
                       </p>
                     </div>
                     <span className="text-sm font-semibold text-accent">

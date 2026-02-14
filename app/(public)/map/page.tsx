@@ -4,7 +4,7 @@
 import dynamic from 'next/dynamic'
 import { useState } from 'react'
 import { LoadingState } from '@/components/shared/LoadingState'
-import { EmptyState } from '@/components/shared/EmptyState'
+import { ProcessingFundingCard } from '@/components/funding/ProcessingFundingCard'
 import { MapControls } from '@/components/map/MapControls'
 import { MapSidebar } from '@/components/map/MapSidebar'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -35,12 +35,7 @@ export default function MapPage() {
   if (locations.length === 0) {
     return (
       <div className="flex min-h-[calc(100vh-var(--topbar-height))] items-center justify-center px-4">
-        <EmptyState
-          variant="not-processed"
-          title="Geographic Evidence Map"
-          description="The evidence map will show location pins, flight routes, and property markers as documents are processed. Known properties include NYC townhouse, Palm Beach estate, New Mexico ranch, Little St. James island, and Paris apartment."
-          showFundingCTA
-        />
+        <ProcessingFundingCard slug="map" className="max-w-lg" />
       </div>
     )
   }
