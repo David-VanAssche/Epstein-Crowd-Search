@@ -48,7 +48,7 @@ export default function ProfilePage() {
             <Avatar className="h-20 w-20 mb-4">
               <AvatarImage src={avatarUrl ?? undefined} />
               <AvatarFallback className="text-2xl">
-                {displayName[0].toUpperCase()}
+                {(displayName[0] ?? 'R').toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <h2 className="text-xl font-semibold">{displayName}</h2>

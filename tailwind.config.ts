@@ -64,7 +64,27 @@ const config: Config = {
   				person: 'hsl(var(--entity-person))',
   				organization: 'hsl(var(--entity-org))',
   				location: 'hsl(var(--entity-location))',
-  				aircraft: 'hsl(var(--entity-aircraft))'
+  				aircraft: 'hsl(var(--entity-aircraft))',
+  				vessel: 'hsl(var(--entity-vessel))',
+  				property: 'hsl(var(--entity-property))',
+  				account: 'hsl(var(--entity-account))',
+  				event: 'hsl(var(--entity-event))',
+  				legal_case: 'hsl(var(--entity-legal-case))',
+  				government_body: 'hsl(var(--entity-government-body))',
+  				trust: 'hsl(var(--entity-trust))',
+  				phone_number: 'hsl(var(--entity-phone-number))',
+  				vehicle: 'hsl(var(--entity-vehicle))',
+  				document_reference: 'hsl(var(--entity-document-reference))'
+  			},
+  			sidebar: {
+  				DEFAULT: 'hsl(var(--sidebar-background))',
+  				foreground: 'hsl(var(--sidebar-foreground))',
+  				primary: 'hsl(var(--sidebar-primary))',
+  				'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
+  				accent: 'hsl(var(--sidebar-accent))',
+  				'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
+  				border: 'hsl(var(--sidebar-border))',
+  				ring: 'hsl(var(--sidebar-ring))'
   			}
   		},
   		fontFamily: {

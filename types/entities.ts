@@ -10,6 +10,13 @@ export type EntityType =
   | 'vessel'
   | 'property'
   | 'account'
+  | 'event'
+  | 'legal_case'
+  | 'government_body'
+  | 'trust'
+  | 'phone_number'
+  | 'vehicle'
+  | 'document_reference'
 
 export type MentionType =
   | 'direct'
@@ -28,6 +35,16 @@ export type RelationshipType =
   | 'witness_testimony'
   | 'employer_of'
   | 'guest_of'
+  | 'owns'
+  | 'controlled_by'
+  | 'beneficiary_of'
+  | 'investigated_by'
+  | 'prosecuted_by'
+  | 'victim_of'
+  | 'co_defendant'
+  | 'introduced_by'
+  | 'recruited_by'
+  | 'located_at'
 
 export interface Entity {
   id: string

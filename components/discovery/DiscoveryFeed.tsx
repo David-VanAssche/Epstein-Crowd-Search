@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 export function DiscoveryFeed() {
   const { discoveries, isLoading } = useDiscoveries()
 
-  if (discoveries.length === 0) {
+  if (isLoading || discoveries.length === 0) {
     return (
       <EmptyState
         variant="not-processed"

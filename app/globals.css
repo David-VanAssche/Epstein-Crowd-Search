@@ -49,6 +49,28 @@
     --entity-org: 271 91% 65%;
     --entity-location: 142 71% 45%;
     --entity-aircraft: 38 92% 50%;
+    --entity-vessel: 188 94% 43%;
+    --entity-property: 25 95% 53%;
+    --entity-account: 330 81% 60%;
+    --entity-event: 350 89% 60%;
+    --entity-legal-case: 235 76% 67%;
+    --entity-government-body: 215 14% 34%;
+    --entity-trust: 0 84% 60%;
+    --entity-phone-number: 168 76% 50%;
+    --entity-vehicle: 48 96% 53%;
+    --entity-document-reference: 240 5% 65%;
+    /* Sidebar */
+    --sidebar-background: 240 10% 5%;
+    --sidebar-foreground: 240 5% 90%;
+    --sidebar-primary: 0 72% 51%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 15% 14%;
+    --sidebar-accent-foreground: 240 5% 90%;
+    --sidebar-border: 240 15% 20%;
+    --sidebar-ring: 0 72% 51%;
+
+    /* Layout */
+    --topbar-height: 3rem;
   }
 }
 

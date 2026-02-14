@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import Link from 'next/link'
 import type { GraphNode, GraphEdge, GraphFilters } from '@/types/graph'
+import { ALL_ENTITY_TYPES } from '@/lib/constants/entity-types'
 
 const RelationshipGraph = dynamic(
   () => import('@/components/graph/RelationshipGraph').then(mod => ({ default: mod.RelationshipGraph })),
@@ -39,7 +40,7 @@ export default function GraphPage() {
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   const [filters, setFilters] = useState<GraphFilters>({
-    entityTypes: ['person', 'organization', 'location', 'aircraft', 'financial_entity'],
+    entityTypes: [...ALL_ENTITY_TYPES],
     minConnectionStrength: 0,
     searchHighlight: '',
     layout: 'force-directed',
@@ -120,7 +121,7 @@ export default function GraphPage() {
 
   if (nodes.length === 0) {
     return (
-      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
+      <div className="flex min-h-[calc(100vh-var(--topbar-height))] items-center justify-center px-4">
         <EmptyState
           variant="not-processed"
           title="Entity Relationship Graph"
@@ -132,7 +133,7 @@ export default function GraphPage() {
   }
 
   return (
-    <div className="relative h-[calc(100vh-4rem)] w-full overflow-hidden bg-background">
+    <div className="relative h-[calc(100vh-var(--topbar-height))] w-full overflow-hidden bg-background">
       <Suspense fallback={<LoadingState variant="page" />}>
         <RelationshipGraph
           nodes={nodes}

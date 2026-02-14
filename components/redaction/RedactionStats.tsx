@@ -15,7 +15,7 @@ export function RedactionStats() {
     { label: 'Confirmed', value: stats.confirmed },
     { label: 'Cascades', value: stats.total_cascades },
     { label: 'Contributors', value: stats.total_contributors },
-    { label: 'Avg Cascade Depth', value: stats.avg_cascade_depth.toFixed(1) },
+    { label: 'Avg Cascade Depth', value: (stats.avg_cascade_depth ?? 0).toFixed(1) },
   ]
 
   return (

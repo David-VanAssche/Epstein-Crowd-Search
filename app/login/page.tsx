@@ -1,9 +1,9 @@
-// app/login/page.tsx
 'use client'
 
 import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
+import { AuthDialog } from '@/components/auth/AuthDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -51,7 +51,7 @@ function LoginPageContent() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
+    <div className="flex min-h-[calc(100vh-var(--topbar-height))] items-center justify-center px-4">
       <Card className="w-full max-w-md border-border bg-surface">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Sign In</CardTitle>

@@ -7,12 +7,12 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 
-interface SidebarProps {
+interface FilterPanelProps {
   children: React.ReactNode
   className?: string
 }
 
-export function Sidebar({ children, className }: SidebarProps) {
+export function FilterPanel({ children, className }: FilterPanelProps) {
   const [collapsed, setCollapsed] = useState(false)
 
   return (

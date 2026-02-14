@@ -1,9 +1,8 @@
 import type { Metadata } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
-import { Header } from '@/components/layout/Header'
-import { Footer } from '@/components/layout/Footer'
 import { QueryProvider } from '@/components/providers/QueryProvider'
-import { ChatFAB } from '@/components/chat/ChatFAB'
+import { AppShell } from '@/components/layout/AppShell'
+import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
 
 const inter = Inter({
@@ -45,12 +44,8 @@ export default function RootLayout({
     >
       <body className="min-h-screen bg-background font-sans antialiased">
         <QueryProvider>
-          <div className="relative flex min-h-screen flex-col">
-            <Header />
-            <main className="flex-1">{children}</main>
-            <Footer />
-            <ChatFAB />
-          </div>
+          <AppShell>{children}</AppShell>
+          <Toaster />
         </QueryProvider>
       </body>
     </html>

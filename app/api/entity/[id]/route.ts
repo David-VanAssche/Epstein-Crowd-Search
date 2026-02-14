@@ -17,10 +17,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
     const supabase = await createClient()
 
-    // Fetch entity with basic data
+    // Fetch entity with basic data (exclude name_embedding to avoid sending 1024d vector)
     const { data: entity, error } = await supabase
       .from('entities')
-      .select('*')
+      .select('id, name, entity_type, aliases, description, first_seen_date, last_seen_date, mention_count, document_count, metadata, source, is_verified, created_at, updated_at, category, wikidata_id, photo_url, birth_date, death_date, nationality, occupation')
       .eq('id', id)
       .single()
 

@@ -15,7 +15,7 @@ interface TransactionFiltersProps {
 }
 
 const TRANSACTION_TYPES = [
-  { value: '', label: 'All types' },
+  { value: 'all', label: 'All types' },
   { value: 'wire_transfer', label: 'Wire Transfer' },
   { value: 'check', label: 'Check' },
   { value: 'cash', label: 'Cash' },
@@ -48,7 +48,7 @@ export function TransactionFilters({ filters, onFiltersChange }: TransactionFilt
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="space-y-2">
           <Label>Type</Label>
-          <Select value={filters.transactionType} onValueChange={(v) => onFiltersChange({ ...filters, transactionType: v })}>
+          <Select value={filters.transactionType || 'all'} onValueChange={(v) => onFiltersChange({ ...filters, transactionType: v === 'all' ? '' : v })}>
             <SelectTrigger><SelectValue placeholder="All types" /></SelectTrigger>
             <SelectContent>
               {TRANSACTION_TYPES.map((t) => (

@@ -43,7 +43,7 @@ export default async function CascadePage({ params }: CascadePageProps) {
 
   if (!cascadeData) {
     return (
-      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
+      <div className="flex min-h-[calc(100vh-var(--topbar-height))] items-center justify-center px-4">
         <EmptyState
           variant="no-results"
           title="Cascade Not Found"
@@ -54,7 +54,7 @@ export default async function CascadePage({ params }: CascadePageProps) {
   }
 
   return (
-    <div className="relative h-[calc(100vh-4rem)] w-full overflow-hidden bg-background">
+    <div className="relative h-[calc(100vh-var(--topbar-height))] w-full overflow-hidden bg-background">
       <CascadeReplayWrapper cascadeData={cascadeData} />
     </div>
   )

@@ -8,6 +8,7 @@ import { LoadingState } from '@/components/shared/LoadingState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import Link from 'next/link'
 import type { GraphNode, GraphEdge, GraphFilters } from '@/types/graph'
+import { ALL_ENTITY_TYPES } from '@/lib/constants/entity-types'
 
 const RelationshipGraph = dynamic(
   () => import('@/components/graph/RelationshipGraph').then(mod => ({ default: mod.RelationshipGraph })),
@@ -29,7 +30,7 @@ export function EntityConnections({ entityId, entityName }: EntityConnectionsPro
   const hasFetched = useRef(false)
 
   const [filters] = useState<GraphFilters>({
-    entityTypes: ['person', 'organization', 'location', 'aircraft', 'financial_entity'],
+    entityTypes: [...ALL_ENTITY_TYPES],
     minConnectionStrength: 0,
     searchHighlight: '',
     layout: 'force-directed',

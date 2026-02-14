@@ -19,6 +19,13 @@ interface CorpusStatsData {
     vessel: number
     property: number
     account: number
+    event: number
+    legal_case: number
+    government_body: number
+    trust: number
+    phone_number: number
+    vehicle: number
+    document_reference: number
   }
   total_relationships: number
   total_redactions: number
@@ -87,7 +94,7 @@ export function CorpusStats({ stats }: CorpusStatsProps) {
     total_images: 0,
     total_videos: 0,
     total_entities: 0,
-    entities_by_type: { person: 0, organization: 0, location: 0, aircraft: 0, vessel: 0, property: 0, account: 0 },
+    entities_by_type: { person: 0, organization: 0, location: 0, aircraft: 0, vessel: 0, property: 0, account: 0, event: 0, legal_case: 0, government_body: 0, trust: 0, phone_number: 0, vehicle: 0, document_reference: 0 },
     total_relationships: 0,
     total_redactions: 0,
     redactions_by_status: { solved: 0, proposed: 0, unsolved: 0 },

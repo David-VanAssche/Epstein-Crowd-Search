@@ -8,7 +8,7 @@ import { SearchBar } from '@/components/search/SearchBar'
 import { SearchResults } from '@/components/search/SearchResults'
 import { SearchFilters } from '@/components/search/SearchFilters'
 import { SearchEmptyState } from '@/components/search/SearchEmptyState'
-import { Sidebar } from '@/components/layout/Sidebar'
+import { FilterPanel } from '@/components/layout/FilterPanel'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { SearchTab } from '@/types/search'
 
@@ -20,7 +20,7 @@ function SearchPageContent() {
   // No query: centered landing mode
   if (!query) {
     return (
-      <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-4">
+      <div className="flex min-h-[calc(100vh-var(--topbar-height))] flex-col items-center justify-center px-4">
         <div className="w-full max-w-2xl">
           <SearchBar />
         </div>
@@ -33,16 +33,16 @@ function SearchPageContent() {
 
   // Has query: results mode with sidebar + tabs
   return (
-    <div className="flex min-h-[calc(100vh-4rem)]">
+    <div className="flex min-h-[calc(100vh-var(--topbar-height))]">
       {/* Filters Sidebar */}
-      <Sidebar>
+      <FilterPanel>
         <SearchFilters />
-      </Sidebar>
+      </FilterPanel>
 
       {/* Main Content */}
       <main className="flex-1 px-4 py-6 lg:px-8">
         {/* Search Bar (sticky) */}
-        <div className="sticky top-16 z-10 -mx-4 bg-background px-4 pb-4 pt-2 lg:-mx-8 lg:px-8">
+        <div className="sticky top-[var(--topbar-height)] z-10 -mx-4 bg-background px-4 pb-4 pt-2 lg:-mx-8 lg:px-8">
           <SearchBar defaultValue={query} />
         </div>
 

@@ -16,6 +16,11 @@ export type PersonCategory =
   | 'staff'
   | 'victim'
   | 'other'
+  | 'minor_victim'
+  | 'financier'
+  | 'religious'
+  | 'philanthropist'
+  | 'flight_crew'
 
 export type ManifestStatus = 'full' | 'partial' | 'missing'
 

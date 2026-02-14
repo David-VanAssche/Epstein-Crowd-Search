@@ -42,7 +42,7 @@ export default function PinboardPage() {
 
   if (boards.length === 0 && !activeBoard) {
     return (
-      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
+      <div className="flex min-h-[calc(100vh-var(--topbar-height))] items-center justify-center px-4">
         <EmptyState
           variant="not-processed"
           title="Evidence Pinboard"
@@ -54,7 +54,7 @@ export default function PinboardPage() {
   }
 
   return (
-    <div className="relative h-[calc(100vh-4rem)] w-full overflow-hidden">
+    <div className="relative h-[calc(100vh-var(--topbar-height))] w-full overflow-hidden">
       <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between border-b border-border bg-surface/95 px-4 py-2 backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <Select>

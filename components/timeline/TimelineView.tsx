@@ -53,7 +53,7 @@ export function TimelineView({ events }: TimelineViewProps) {
   return (
     <div className="relative">
       {/* Year quick-jump nav (sticky) */}
-      <div className="sticky top-16 z-10 mb-6 flex flex-wrap gap-2 bg-background/95 py-2 backdrop-blur-sm">
+      <div className="sticky top-[var(--topbar-height)] z-10 mb-6 flex flex-wrap gap-2 bg-background/95 py-2 backdrop-blur-sm">
         {sortedYears.map((year) => (
           <button
             key={year}

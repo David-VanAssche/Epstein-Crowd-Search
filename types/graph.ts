@@ -1,9 +1,11 @@
 // types/graph.ts
 
+import type { EntityType } from './entities'
+
 export interface GraphNode {
   id: string
   name: string
-  entityType: string
+  entityType: EntityType
   mentionCount: number
   connectionCount: number
   documentCount: number
@@ -32,7 +34,7 @@ export interface GraphEdge {
 }
 
 export interface GraphFilters {
-  entityTypes: string[]
+  entityTypes: EntityType[]
   minConnectionStrength: number
   searchHighlight: string
   layout: 'force-directed' | 'radial' | 'hierarchical'

@@ -277,7 +277,10 @@ export const networkAnalysisSchema = z.object({
   page: z.number().int().min(1).default(1),
   per_page: z.number().int().min(1).max(100).default(20),
   sort: z.enum(['pagerank', 'betweenness', 'degree']).default('pagerank'),
-  entity_type: z.string().optional(),
+  entity_type: z.enum([
+    'person', 'organization', 'location', 'aircraft', 'vessel', 'property', 'account',
+    'event', 'legal_case', 'government_body', 'trust', 'phone_number', 'vehicle', 'document_reference',
+  ]).optional(),
 })
 
 export type NetworkAnalysisInput = z.infer<typeof networkAnalysisSchema>

@@ -25,7 +25,35 @@ export function FinancialSummary() {
     )
   }
 
-  if (!summary) return null
+  if (!summary) {
+    return (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Volume', icon: DollarSign, value: '$0' },
+          { label: 'Transactions', icon: Hash, value: '0' },
+          { label: 'Suspicious', icon: AlertTriangle, value: '0' },
+          { label: 'Types', icon: TrendingUp, value: '0' },
+        ].map((s) => {
+          const Icon = s.icon
+          return (
+            <Card key={s.label}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg bg-surface-elevated p-2">
+                    <Icon className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{s.label}</p>
+                    <p className="text-xl font-bold text-muted-foreground">{s.value}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+    )
+  }
 
   const stats = [
     { label: 'Total Volume', value: formatAmount(summary.total_amount), icon: DollarSign },

@@ -12,14 +12,8 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import type { GraphFilters } from '@/types/graph'
-
-const ENTITY_TYPES = [
-  { value: 'person', label: 'People', color: '#60a5fa' },
-  { value: 'organization', label: 'Organizations', color: '#c084fc' },
-  { value: 'location', label: 'Locations', color: '#4ade80' },
-  { value: 'aircraft', label: 'Aircraft', color: '#fbbf24' },
-  { value: 'financial_entity', label: 'Financial', color: '#f87171' },
-]
+import type { EntityType } from '@/types/entities'
+import { ALL_ENTITY_TYPES, ENTITY_TYPE_META } from '@/lib/constants/entity-types'
 
 interface GraphControlsProps {
   filters: GraphFilters
@@ -37,7 +31,7 @@ export function GraphControls({
 }: GraphControlsProps) {
   const [isExpanded, setIsExpanded] = useState(true)
 
-  const toggleEntityType = (type: string) => {
+  const toggleEntityType = (type: EntityType) => {
     const updated = filters.entityTypes.includes(type)
       ? filters.entityTypes.filter((t) => t !== type)
       : [...filters.entityTypes, type]
@@ -77,17 +71,20 @@ export function GraphControls({
           <Separator />
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground">Entity Types</Label>
-            {ENTITY_TYPES.map(({ value, label, color }) => (
-              <div key={value} className="flex items-center gap-2">
-                <Checkbox
-                  id={`type-${value}`}
-                  checked={filters.entityTypes.includes(value)}
-                  onCheckedChange={() => toggleEntityType(value)}
-                />
-                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
-                <Label htmlFor={`type-${value}`} className="text-xs">{label}</Label>
-              </div>
-            ))}
+            {ALL_ENTITY_TYPES.map((type) => {
+              const meta = ENTITY_TYPE_META[type]
+              return (
+                <div key={type} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`type-${type}`}
+                    checked={filters.entityTypes.includes(type)}
+                    onCheckedChange={() => toggleEntityType(type)}
+                  />
+                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: meta.color }} />
+                  <Label htmlFor={`type-${type}`} className="text-xs">{meta.label}</Label>
+                </div>
+              )
+            })}
           </div>
           <Separator />
           <div className="space-y-2">

@@ -133,7 +133,21 @@ export function FinancialFlowDiagram() {
     )
   }
 
-  if (!summary || summary.top_senders.length === 0) return null
+  if (!summary || summary.top_senders.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Financial Flows</CardTitle>
+          <p className="text-xs text-muted-foreground">Sankey diagram showing money flow from senders through transaction types to receivers</p>
+        </CardHeader>
+        <CardContent>
+          <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+            Financial flow data will appear here once transactions are extracted from documents.
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card>

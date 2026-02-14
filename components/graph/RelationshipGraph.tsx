@@ -4,16 +4,11 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import * as d3 from 'd3'
 import type { GraphNode, GraphEdge, GraphFilters } from '@/types/graph'
+import { ENTITY_TYPE_META } from '@/lib/constants/entity-types'
 
-const ENTITY_COLORS: Record<string, string> = {
-  person: '#60a5fa',
-  organization: '#c084fc',
-  location: '#4ade80',
-  aircraft: '#fbbf24',
-  financial_entity: '#f87171',
-  event: '#fb923c',
-  document: '#94a3b8',
-}
+const ENTITY_COLORS: Record<string, string> = Object.fromEntries(
+  Object.entries(ENTITY_TYPE_META).map(([k, v]) => [k, v.color])
+)
 
 const CRIMINAL_COLORS = {
   low: '#4ade80',
@@ -35,7 +30,7 @@ interface RelationshipGraphProps {
 interface SimulationNode extends d3.SimulationNodeDatum {
   id: string
   name: string
-  entityType: string
+  entityType: string // kept as string for d3 compat — validated upstream via GraphNode.entityType
   mentionCount: number
   connectionCount: number
   criminalIndicatorScore?: number

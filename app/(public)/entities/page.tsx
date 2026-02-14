@@ -53,11 +53,22 @@ export default function EntitiesPage() {
       </div>
 
       <Tabs value={typeFilter} onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}>
-        <TabsList>
+        <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="person">People</TabsTrigger>
           <TabsTrigger value="organization">Organizations</TabsTrigger>
           <TabsTrigger value="location">Locations</TabsTrigger>
+          <TabsTrigger value="aircraft">Aircraft</TabsTrigger>
+          <TabsTrigger value="vessel">Vessels</TabsTrigger>
+          <TabsTrigger value="property">Properties</TabsTrigger>
+          <TabsTrigger value="account">Accounts</TabsTrigger>
+          <TabsTrigger value="event">Events</TabsTrigger>
+          <TabsTrigger value="legal_case">Legal Cases</TabsTrigger>
+          <TabsTrigger value="government_body">Gov Bodies</TabsTrigger>
+          <TabsTrigger value="trust">Trusts</TabsTrigger>
+          <TabsTrigger value="phone_number">Phone Numbers</TabsTrigger>
+          <TabsTrigger value="vehicle">Vehicles</TabsTrigger>
+          <TabsTrigger value="document_reference">Doc References</TabsTrigger>
         </TabsList>
 
         <TabsContent value={typeFilter} className="mt-6">
@@ -73,7 +84,7 @@ export default function EntitiesPage() {
             <EmptyState
               variant="not-processed"
               title="No Entities Yet"
-              description="Entities are extracted automatically as documents are processed. Help fund processing to discover the people, organizations, and locations in the files."
+              description="Entities are extracted automatically as documents are processed. Help fund processing to discover the people, organizations, locations, aircraft, vessels, properties, and accounts in the files."
               showFundingCTA
             />
           )}

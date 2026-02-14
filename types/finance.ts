@@ -32,7 +32,7 @@ export interface FinancialSummary {
 export interface FinancialFlowNode {
   id: string
   name: string
-  type: 'person' | 'organization' | 'account' | 'unknown'
+  type: 'person' | 'organization' | 'account' | 'trust' | 'unknown'
 }
 
 export interface FinancialFlowLink {

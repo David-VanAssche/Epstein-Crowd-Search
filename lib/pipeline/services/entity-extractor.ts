@@ -13,6 +13,13 @@ const ENTITY_TYPES = [
   'vessel',
   'property',
   'account',
+  'event',
+  'legal_case',
+  'government_body',
+  'trust',
+  'phone_number',
+  'vehicle',
+  'document_reference',
 ] as const
 
 type EntityType = (typeof ENTITY_TYPES)[number]
@@ -77,7 +84,7 @@ Return JSON:
 }
 
 If no entities found, return { "entities": [] }.
-Be thorough — extract ALL people, organizations, locations, aircraft, vessels, properties, and accounts mentioned.`,
+Be thorough — extract ALL entities mentioned including people, organizations, locations, aircraft, vessels, properties, accounts, events, legal cases, government bodies, trusts/shell companies, phone numbers, vehicles, and document references.`,
               },
             ],
           },

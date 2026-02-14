@@ -88,12 +88,12 @@ export default function ContradictionsPage() {
 
       {/* Filters */}
       <div className="mb-6 flex items-center gap-4">
-        <Select value={severity} onValueChange={(v) => { setSeverity(v); setPage(1) }}>
+        <Select value={severity || 'all'} onValueChange={(v) => { setSeverity(v === 'all' ? '' : v); setPage(1) }}>
           <SelectTrigger className="w-40">
             <SelectValue placeholder="All severities" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All severities</SelectItem>
+            <SelectItem value="all">All severities</SelectItem>
             <SelectItem value="critical">Critical</SelectItem>
             <SelectItem value="high">High</SelectItem>
             <SelectItem value="medium">Medium</SelectItem>

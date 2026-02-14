@@ -34,7 +34,7 @@ export default function MapPage() {
 
   if (locations.length === 0) {
     return (
-      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
+      <div className="flex min-h-[calc(100vh-var(--topbar-height))] items-center justify-center px-4">
         <EmptyState
           variant="not-processed"
           title="Geographic Evidence Map"
@@ -46,7 +46,7 @@ export default function MapPage() {
   }
 
   return (
-    <div className="relative h-[calc(100vh-4rem)] w-full overflow-hidden">
+    <div className="relative h-[calc(100vh-var(--topbar-height))] w-full overflow-hidden">
       <EvidenceMap
         locations={locations}
         filters={filters}
