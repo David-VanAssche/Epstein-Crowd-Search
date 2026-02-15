@@ -6,6 +6,8 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { normalizeEntityName } from '@/lib/utils/normalize-entity-name'
 import { isJunkEntity } from '@/lib/utils/junk-entity-filter'
+import { buildPromptContext, buildEntityExtractionPrompt, PROMPT_VERSION } from '@/lib/pipeline/prompts'
+import type { PromptContext } from '@/lib/pipeline/prompts'
 
 const ENTITY_TYPES = [
   'person',
@@ -41,56 +43,18 @@ interface ExtractedEntities {
 
 async function extractEntitiesFromChunk(
   chunkContent: string,
-  documentType: string,
+  ctx: PromptContext,
   apiKey: string
 ): Promise<ExtractedEntities> {
+  const prompt = buildEntityExtractionPrompt(ctx, chunkContent)
+
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: `Extract all named entities from this text chunk of a ${documentType} document.
-
-Entity types: ${ENTITY_TYPES.join(', ')}
-
-Text:
----
-${chunkContent}
----
-
-For each entity found, provide:
-- name: The canonical name (e.g., "Jeffrey Epstein" not "Epstein" or "Mr. Epstein")
-- type: One of the entity types above
-- aliases: Any alternate names/forms used in the text
-- mentionText: The exact text mention in the chunk
-- contextSnippet: 1-2 sentences surrounding the mention
-- confidence: 0.0-1.0 how confident you are this is a real entity
-
-Return JSON:
-{
-  "entities": [
-    {
-      "name": "...",
-      "type": "...",
-      "aliases": ["..."],
-      "mentionText": "...",
-      "contextSnippet": "...",
-      "confidence": 0.95
-    }
-  ]
-}
-
-If no entities found, return { "entities": [] }.
-Be thorough — extract ALL entities mentioned including people, organizations, locations, aircraft, vessels, properties, accounts, events, legal cases, government bodies, trusts/shell companies, phone numbers, vehicles, and document references.`,
-              },
-            ],
-          },
-        ],
+        contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.1,
           maxOutputTokens: 4096,
@@ -187,12 +151,28 @@ export async function handleEntityExtract(
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
-  // Get document type for context
+  // Get document classification for prompt routing
   const { data: doc } = await supabase
     .from('documents')
-    .select('classification')
+    .select('classification, classification_confidence, classification_tags, filename')
     .eq('id', documentId)
     .single()
+
+  let ctx: PromptContext
+  try {
+    ctx = buildPromptContext(
+      (doc as any)?.classification || 'other',
+      ((doc as any)?.classification_tags as string[]) || [],
+      {
+        documentId,
+        filename: (doc as any)?.filename || '',
+        primaryConfidence: (doc as any)?.classification_confidence ?? 0,
+      }
+    )
+  } catch {
+    console.warn(`[EntityExtract] PromptContext build failed for ${documentId}, using default tier`)
+    ctx = buildPromptContext('other', [], { documentId, filename: '', primaryConfidence: 0 })
+  }
 
   const documentType = (doc as any)?.classification || 'unknown'
 
@@ -226,7 +206,7 @@ export async function handleEntityExtract(
     try {
       const extracted = await extractEntitiesFromChunk(
         (chunk as any).content,
-        documentType,
+        ctx,
         apiKey
       )
 

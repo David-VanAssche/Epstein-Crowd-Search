@@ -45,6 +45,8 @@ export type RelationshipType =
   | 'introduced_by'
   | 'recruited_by'
   | 'located_at'
+  | 'communicated_with'
+  | 'met_with'
 
 export interface RiskFactors {
   evidence_score: number

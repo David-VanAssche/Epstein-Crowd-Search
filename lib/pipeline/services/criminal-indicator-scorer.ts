@@ -3,6 +3,8 @@
 // CRITICAL ETHICAL NOTE: Flags patterns for human review — never makes accusations.
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { buildPromptContext, buildCriminalIndicatorPrompt } from '@/lib/pipeline/prompts'
+import type { PromptContext } from '@/lib/pipeline/prompts'
 
 const INDICATOR_CATEGORIES = [
   'trafficking',
@@ -25,52 +27,22 @@ interface CriminalIndicator {
 
 async function analyzeCriminalIndicators(
   ocrTextSample: string,
-  classification: string,
+  ctx: PromptContext,
   entities: string[],
   apiKey: string
 ): Promise<CriminalIndicator[]> {
+  const prompt = buildCriminalIndicatorPrompt(ctx, entities, ocrTextSample)
+
+  // Contacts tier returns empty prompt — no meaningful criminal indicators
+  if (!prompt) return []
+
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: `Analyze this ${classification} document for patterns that may indicate criminal activity.
-
-Categories to check:
-- trafficking: travel patterns with minors, exploitation language, grooming indicators
-- obstruction: document destruction references, witness intimidation, evidence concealment
-- conspiracy: coordination language, coded communication, planning references
-- financial_crimes: money laundering patterns, hidden assets, unreported transfers
-- witness_tampering: threats to witnesses, incentives for silence, intimidation
-- exploitation: power dynamics, coercion references, abuse indicators
-
-Known entities in document: ${entities.slice(0, 10).join(', ')}
-
-Document text:
----
-${ocrTextSample}
----
-
-For each indicator found, provide:
-- category: one of the categories above
-- severity: "low", "medium", or "high"
-- description: what pattern was detected and why it's notable
-- evidenceSnippet: the relevant text excerpt (max 200 chars)
-- confidence: 0.0-1.0
-
-IMPORTANT: Flag patterns for human review only. Do NOT make accusations.
-
-Return JSON: { "indicators": [...] }
-Return { "indicators": [] } if no indicators found.`,
-              },
-            ],
-          },
-        ],
+        contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.1,
           maxOutputTokens: 2048,
@@ -105,12 +77,28 @@ export async function handleCriminalIndicators(
 
   const { data: doc, error } = await supabase
     .from('documents')
-    .select('id, ocr_text, classification, metadata')
+    .select('id, ocr_text, classification, classification_confidence, classification_tags, filename, metadata')
     .eq('id', documentId)
     .single()
 
   if (error || !doc) throw new Error(`Document not found: ${documentId}`)
   if (!(doc as any).ocr_text) return
+
+  let ctx: PromptContext
+  try {
+    ctx = buildPromptContext(
+      (doc as any).classification || 'other',
+      ((doc as any).classification_tags as string[]) || [],
+      {
+        documentId,
+        filename: (doc as any).filename || '',
+        primaryConfidence: (doc as any).classification_confidence ?? 0,
+      }
+    )
+  } catch {
+    console.warn(`[CriminalIndicators] PromptContext build failed for ${documentId}, using default tier`)
+    ctx = buildPromptContext('other', [], { documentId, filename: '', primaryConfidence: 0 })
+  }
 
   const { data: mentions } = await supabase
     .from('entity_mentions')
@@ -129,7 +117,7 @@ export async function handleCriminalIndicators(
 
   const indicators = await analyzeCriminalIndicators(
     textSample,
-    (doc as any).classification || 'unknown',
+    ctx,
     entityNames,
     apiKey
   )
