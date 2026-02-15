@@ -68,7 +68,7 @@ export default function DatasetsPage() {
                     {ds.image_count > 0 && <span>{ds.image_count.toLocaleString()} images</span>}
                     {ds.video_count > 0 && <span>{ds.video_count.toLocaleString()} videos</span>}
                   </div>
-                  <Progress value={0} className="h-2" />
+                  <Progress value={ds.processing_status === 'complete' ? 100 : ds.processing_status === 'processing' ? 50 : 0} className="h-2" />
                 </CardContent>
               </Card>
             )

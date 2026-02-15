@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     if (!type || type === 'connection') {
       const { data } = await supabase
         .from('entity_relationships')
-        .select('id, relationship_type, created_at, source_entity_id, target_entity_id')
+        .select('id, relationship_type, created_at, entity_a_id, entity_b_id')
         .order('created_at', { ascending: false })
         .limit(limit)
       if (data) {
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
             type: 'connection',
             description: `New ${row.relationship_type ?? 'connection'} relationship discovered`,
             timestamp: row.created_at,
-            link: `/graph?entity=${row.source_entity_id}`,
+            link: `/graph?entity=${row.entity_a_id}`,
             actor: null,
           })
         }
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     if (!type || type === 'processing') {
       const { data } = await supabase
         .from('documents')
-        .select('id, original_filename, created_at')
+        .select('id, filename, created_at')
         .order('created_at', { ascending: false })
         .limit(limit)
       if (data) {
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
           items.push({
             id: `processing-${row.id}`,
             type: 'processing',
-            description: `Document processed: ${row.original_filename ?? 'Unknown'}`,
+            description: `Document processed: ${row.filename ?? 'Unknown'}`,
             timestamp: row.created_at,
             link: `/document/${row.id}`,
             actor: null,

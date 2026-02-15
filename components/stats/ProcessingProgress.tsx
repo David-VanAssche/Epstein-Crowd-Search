@@ -1,43 +1,38 @@
 // components/stats/ProcessingProgress.tsx
 'use client'
 
+import { useQuery } from '@tanstack/react-query'
 import { Progress } from '@/components/ui/progress'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { fetchApi } from '@/lib/api/client'
 
-const DATASETS = [
-  { name: 'SDNY Court Documents', total_pages: 450000 },
-  { name: 'FBI Investigation Files', total_pages: 380000 },
-  { name: 'Grand Jury Materials', total_pages: 290000 },
-  { name: 'Palm Beach Police Reports', total_pages: 125000 },
-  { name: 'Flight Logs & Travel Records', total_pages: 85000 },
-  { name: 'Financial Records', total_pages: 520000 },
-  { name: 'Correspondence & Communications', total_pages: 340000 },
-  { name: 'Deposition Transcripts', total_pages: 210000 },
-  { name: 'Victim Impact Statements', total_pages: 95000 },
-  { name: 'Property & Asset Records', total_pages: 180000 },
-  { name: 'Media & Press Materials', total_pages: 145000 },
-  { name: 'Miscellaneous DOJ Files', total_pages: 680000 },
-]
-
-interface ProcessingProgressProps {
-  stats?: {
-    total_pages_processed: number
-    total_pages: number
-    per_dataset: Array<{ name: string; processed: number; total: number }>
-  }
+interface Dataset {
+  id: string
+  dataset_number: number
+  name: string
+  page_count: number
+  processing_status: string
 }
 
-export function ProcessingProgress({ stats }: ProcessingProgressProps) {
-  const totalPages = stats?.total_pages ?? 3500000
-  const processedPages = stats?.total_pages_processed ?? 0
+export function ProcessingProgress() {
+  const { data: datasets } = useQuery({
+    queryKey: ['datasets'],
+    queryFn: () => fetchApi<Dataset[]>('/api/datasets'),
+    staleTime: 300_000,
+  })
+
+  const dsArray = datasets ?? []
+  const totalPages = dsArray.reduce((sum, ds) => sum + (ds.page_count || 0), 0)
+  // Honest: we haven't run the pipeline, so processed = 0
+  const processedPages = 0
   const overallPercent = totalPages > 0
     ? Math.round((processedPages / totalPages) * 100)
     : 0
 
-  const datasets = stats?.per_dataset ?? DATASETS.map((d) => ({
-    name: d.name,
+  const perDataset = dsArray.map((ds) => ({
+    name: ds.name,
     processed: 0,
-    total: d.total_pages,
+    total: ds.page_count || 0,
   }))
 
   return (
@@ -58,7 +53,7 @@ export function ProcessingProgress({ stats }: ProcessingProgressProps) {
         </div>
 
         <div className="space-y-4">
-          {datasets.map((dataset) => {
+          {perDataset.map((dataset) => {
             const pct = dataset.total > 0
               ? Math.min(100, Math.round((dataset.processed / dataset.total) * 100))
               : 0
