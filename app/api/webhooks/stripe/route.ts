@@ -68,41 +68,29 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (contribution) {
-        // Idempotency: skip if already refunded
+        // Idempotency: skip if already fully refunded
         if (contribution.status === 'refunded') {
           return NextResponse.json({ received: true })
         }
 
-        // Mark as refunded FIRST
+        // Determine actual refund amount from Stripe (handles partial refunds)
+        // charge.amount_refunded is the cumulative refunded amount in cents
+        const refundedCents = (charge as any).amount_refunded || contribution.amount_cents
+        const isFullRefund = refundedCents >= contribution.amount_cents
+
+        // Update contribution status
         await supabase
           .from('contributions')
           .update({
-            status: 'refunded',
+            status: isFullRefund ? 'refunded' : 'partial_refund',
             updated_at: new Date().toISOString(),
           })
           .eq('id', contribution.id)
 
-        // Decrement campaign funded_amount directly (allocate_contribution
-        // won't work here because it requires status='paid', which we just
-        // changed to 'refunded')
-        if (contribution.campaign_id) {
-          const { data: campaign } = await supabase
-            .from('processing_campaigns')
-            .select('funded_amount')
-            .eq('id', contribution.campaign_id)
-            .single()
-
-          if (campaign) {
-            await supabase
-              .from('processing_campaigns')
-              .update({
-                funded_amount: Math.max(0, (campaign.funded_amount || 0) - contribution.amount_cents),
-              })
-              .eq('id', contribution.campaign_id)
-          }
-        }
-
         // Recompute global funding status from all paid contributions
+        // This re-sums all contributions with status='paid', so a full refund
+        // (status='refunded') is automatically excluded. For partial refunds,
+        // the original amount_cents stays unchanged and is still counted.
         await supabase.rpc('recompute_funding_status')
       }
     }

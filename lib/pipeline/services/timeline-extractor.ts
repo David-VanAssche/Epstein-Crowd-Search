@@ -3,6 +3,7 @@
 // Creates timeline_events records linked to entities and source documents.
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { normalizeEntityName } from '@/lib/utils/normalize-entity-name'
 
 interface ExtractedEvent {
   date: string | null
@@ -80,8 +81,8 @@ export async function handleTimelineExtract(
 ): Promise<void> {
   console.log(`[Timeline] Processing document ${documentId}`)
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY
-  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY not set')
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
   const { data: doc } = await supabase
     .from('documents')
@@ -111,11 +112,13 @@ export async function handleTimelineExtract(
         // Resolve entity names to IDs
         const entityIds: string[] = []
         for (const name of event.entityNames || []) {
+          const normalized = normalizeEntityName(name)
+          if (!normalized) continue
           const { data: entity } = await supabase
             .from('entities')
             .select('id')
-            .eq('name', name)
-            .single()
+            .eq('name_normalized', normalized)
+            .maybeSingle()
           if (entity) entityIds.push((entity as any).id)
         }
 

@@ -184,8 +184,8 @@ export async function handleEntityExtract(
 ): Promise<void> {
   console.log(`[EntityExtract] Processing document ${documentId}`)
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY
-  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY not set')
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
   // Get document type for context
   const { data: doc } = await supabase

@@ -384,10 +384,10 @@ export class NetworkMetricsService {
   }
 }
 
-/** Pipeline stage handler (batch operation, not per-document) */
+/** Pipeline stage handler (batch operation — use NetworkMetricsService.computeAll() for batch) */
 export async function handleNetworkMetrics(
   _documentId: string,
   _supabase: SupabaseClient
-): Promise<{ success: boolean; error?: string }> {
-  return { success: true }
+): Promise<void> {
+  // Network metrics are a batch operation across the entire entity graph, not per-document
 }

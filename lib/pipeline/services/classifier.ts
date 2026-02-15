@@ -115,15 +115,15 @@ export async function handleClassify(
 
   const { data: doc, error } = await supabase
     .from('documents')
-    .select('id, filename, ocr_text')
+    .select('id, filename, ocr_text, metadata')
     .eq('id', documentId)
     .single()
 
   if (error || !doc) throw new Error(`Document not found: ${documentId}`)
   if (!doc.ocr_text) throw new Error(`Document ${documentId} has no OCR text — run OCR first`)
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY
-  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY not set')
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
   const result = await classifyDocument(doc.ocr_text, doc.filename, apiKey)
 
@@ -133,6 +133,7 @@ export async function handleClassify(
       classification: result.type,
       classification_confidence: result.confidence,
       metadata: {
+        ...((doc as any).metadata || {}),
         classification_reasoning: result.reasoning,
         classification_timestamp: new Date().toISOString(),
       },

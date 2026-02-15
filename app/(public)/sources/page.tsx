@@ -18,11 +18,20 @@ const STATUS_COLORS: Record<string, string> = {
   unavailable: 'bg-zinc-700/20 text-zinc-500 border-zinc-700/30',
 }
 
+const SOURCE_TYPE_LABELS: Record<string, string> = {
+  government: 'Government',
+  court: 'Court Filing',
+  law_enforcement: 'Law Enforcement',
+  public_record: 'Public Record',
+  media: 'Media',
+}
+
 interface DataSource {
   id: string
   name: string
   source_type: string
   url: string | null
+  description: string | null
   data_type: string
   status: string
   expected_count: number | null
@@ -40,10 +49,10 @@ export default function SourcesPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 lg:px-8">
-      <h1 className="mb-2 text-3xl font-bold">Data Sources</h1>
+      <h1 className="mb-2 text-3xl font-bold">Document Sources</h1>
       <p className="mb-8 text-muted-foreground">
-        Status of all 24 community and official data sources. Community-processed data
-        (OCR text, embeddings, entities) is ingested for free before spending on AI processing.
+        Authoritative sources of documents in the archive. All materials originate from
+        government releases, court filings, law enforcement records, and public record requests.
       </p>
 
       {isLoading ? (
@@ -56,33 +65,41 @@ export default function SourcesPage() {
                 <TableRow>
                   <TableHead>Source</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Data</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Ingested</TableHead>
+                  <TableHead className="text-right">Pages / Files</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sourceList.map((source) => (
                   <TableRow key={source.id}>
-                    <TableCell className="font-medium">
-                      {source.url ? (
-                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-info hover:underline">
-                          {source.name}
-                        </a>
-                      ) : (
-                        source.name
+                    <TableCell>
+                      <div className="font-medium">
+                        {source.url ? (
+                          <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-info hover:underline">
+                            {source.name}
+                          </a>
+                        ) : (
+                          source.name
+                        )}
+                      </div>
+                      {source.description && (
+                        <div className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                          {source.description}
+                        </div>
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{source.source_type}</TableCell>
-                    <TableCell className="text-muted-foreground">{source.data_type}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {SOURCE_TYPE_LABELS[source.source_type] || source.source_type}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={STATUS_COLORS[source.status] || ''}>
                         {source.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
-                      {source.ingested_count.toLocaleString()}
-                      {source.expected_count ? ` / ${source.expected_count.toLocaleString()}` : ''}
+                    <TableCell className="text-right tabular-nums">
+                      {source.expected_count
+                        ? source.expected_count.toLocaleString()
+                        : source.ingested_count.toLocaleString()}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -93,8 +110,8 @@ export default function SourcesPage() {
       ) : (
         <EmptyState
           variant="community-data"
-          title="Data Sources Loading"
-          description="Source status will appear here once the data ingestion pipeline begins. 24 community and official sources have been identified."
+          title="Document Sources Loading"
+          description="Source information will appear here once the data ingestion pipeline begins."
         />
       )}
     </div>

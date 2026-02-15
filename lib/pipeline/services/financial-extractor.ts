@@ -153,142 +153,137 @@ const VALID_TRANSACTION_TYPES = new Set([
 export async function handleFinancialExtract(
   documentId: string,
   supabase: SupabaseClient
-): Promise<{ success: boolean; error?: string }> {
+): Promise<void> {
   console.log(`[FinancialExtractor] Processing document ${documentId}`)
 
   const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) return { success: false, error: 'GEMINI_API_KEY not set' }
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
-  try {
-    // Check classification
-    const { data: doc, error: docError } = await supabase
-      .from('documents')
-      .select('id, classification, ocr_text')
-      .eq('id', documentId)
-      .single()
+  // Check classification
+  const { data: doc, error: docError } = await supabase
+    .from('documents')
+    .select('id, classification, ocr_text')
+    .eq('id', documentId)
+    .single()
 
-    if (docError || !doc) {
-      return { success: false, error: `Document not found: ${docError?.message}` }
-    }
+  if (docError || !doc) {
+    throw new Error(`Document not found: ${docError?.message}`)
+  }
 
-    const classification = (doc as any).classification || 'unknown'
-    if (!RELEVANT_CLASSIFICATIONS.includes(classification as any)) {
-      return { success: true } // Not relevant
-    }
+  const classification = (doc as any).classification || 'unknown'
+  if (!RELEVANT_CLASSIFICATIONS.includes(classification as any)) {
+    console.log(`[FinancialExtractor] Skipping ${documentId} — classification "${classification}" not relevant`)
+    return
+  }
 
-    // Idempotency check
-    const { count } = await supabase
-      .from('financial_transactions')
-      .select('id', { count: 'exact', head: true })
-      .eq('document_id', documentId)
+  // Idempotency check
+  const { count } = await supabase
+    .from('financial_transactions')
+    .select('id', { count: 'exact', head: true })
+    .eq('document_id', documentId)
 
-    if (count && count > 0) {
-      console.log(`[FinancialExtractor] Skipping ${documentId} — ${count} transactions exist`)
-      return { success: true }
-    }
+  if (count && count > 0) {
+    console.log(`[FinancialExtractor] Skipping ${documentId} — ${count} transactions exist`)
+    return
+  }
 
-    // Get text content
-    let documentText = (doc as any).ocr_text || ''
-    if (!documentText) {
-      const { data: chunks } = await supabase
-        .from('chunks')
-        .select('id, content')
-        .eq('document_id', documentId)
-        .order('chunk_index', { ascending: true })
-
-      if (chunks && chunks.length > 0) {
-        documentText = chunks.map((c: any) => c.content).join('\n\n')
-      }
-    }
-
-    if (!documentText.trim()) {
-      return { success: true } // No text
-    }
-
-    // Get first chunk for FK reference
-    const { data: firstChunk } = await supabase
+  // Get text content
+  let documentText = (doc as any).ocr_text || ''
+  if (!documentText) {
+    const { data: chunks } = await supabase
       .from('chunks')
-      .select('id')
+      .select('id, content')
       .eq('document_id', documentId)
       .order('chunk_index', { ascending: true })
-      .limit(1)
-      .single()
 
-    const chunkId = firstChunk ? (firstChunk as any).id : null
-
-    // Extract transactions
-    const transactions = await callGemini(documentText, classification, apiKey)
-
-    if (transactions.length === 0) {
-      console.log(`[FinancialExtractor] ${documentId}: no transactions found`)
-      return { success: true }
+    if (chunks && chunks.length > 0) {
+      documentText = chunks.map((c: any) => c.content).join('\n\n')
     }
+  }
 
-    // Create extraction record
-    const { data: extraction } = await supabase
-      .from('structured_data_extractions')
+  if (!documentText.trim()) {
+    console.log(`[FinancialExtractor] Skipping ${documentId} — no text content`)
+    return
+  }
+
+  // Get first chunk for FK reference
+  const { data: firstChunk } = await supabase
+    .from('chunks')
+    .select('id')
+    .eq('document_id', documentId)
+    .order('chunk_index', { ascending: true })
+    .limit(1)
+    .single()
+
+  const chunkId = firstChunk ? (firstChunk as any).id : null
+
+  // Extract transactions
+  const transactions = await callGemini(documentText, classification, apiKey)
+
+  if (transactions.length === 0) {
+    console.log(`[FinancialExtractor] ${documentId}: no transactions found`)
+    return
+  }
+
+  // Create extraction record
+  const { data: extraction } = await supabase
+    .from('structured_data_extractions')
+    .insert({
+      document_id: documentId,
+      extraction_type: 'financial_transaction',
+      extracted_data: { transactions },
+      confidence: transactions.reduce((s, t) => s + t.confidence, 0) / transactions.length,
+    })
+    .select('id')
+    .single()
+
+  const extractionId = extraction ? (extraction as any).id : null
+
+  // Insert transactions
+  let inserted = 0
+  for (const tx of transactions) {
+    const fromEntityId = await resolveEntityId(tx.from_name, supabase)
+    const toEntityId = await resolveEntityId(tx.to_name, supabase)
+
+    const isSuspicious = tx.suspicious_indicators.length > 0
+    const shellCompanyInvolved = !!(
+      (tx.from_name && /\b(LLC|Ltd|Inc|Corp|Limited|Holdings|Trust)\b/i.test(tx.from_name)) ||
+      (tx.to_name && /\b(LLC|Ltd|Inc|Corp|Limited|Holdings|Trust)\b/i.test(tx.to_name))
+    )
+
+    const txType = VALID_TRANSACTION_TYPES.has(tx.transaction_type)
+      ? tx.transaction_type
+      : 'other'
+
+    const { error: insertError } = await supabase
+      .from('financial_transactions')
       .insert({
         document_id: documentId,
-        extraction_type: 'financial_transaction',
-        extracted_data: { transactions },
-        confidence: transactions.reduce((s, t) => s + t.confidence, 0) / transactions.length,
+        chunk_id: chunkId,
+        extraction_id: extractionId,
+        from_entity_id: fromEntityId,
+        from_raw: tx.from_name,
+        to_entity_id: toEntityId,
+        to_raw: tx.to_name,
+        amount: tx.amount,
+        currency: tx.currency,
+        transaction_date: tx.transaction_date,
+        transaction_type: txType,
+        description: tx.description,
+        is_suspicious: isSuspicious,
+        suspicious_reasons: tx.suspicious_indicators,
+        shell_company_involved: shellCompanyInvolved,
+        confidence: tx.confidence,
       })
-      .select('id')
-      .single()
 
-    const extractionId = extraction ? (extraction as any).id : null
-
-    // Insert transactions
-    let inserted = 0
-    for (const tx of transactions) {
-      const fromEntityId = await resolveEntityId(tx.from_name, supabase)
-      const toEntityId = await resolveEntityId(tx.to_name, supabase)
-
-      const isSuspicious = tx.suspicious_indicators.length > 0
-      const shellCompanyInvolved = !!(
-        (tx.from_name && /\b(LLC|Ltd|Inc|Corp|Limited|Holdings|Trust)\b/i.test(tx.from_name)) ||
-        (tx.to_name && /\b(LLC|Ltd|Inc|Corp|Limited|Holdings|Trust)\b/i.test(tx.to_name))
-      )
-
-      const txType = VALID_TRANSACTION_TYPES.has(tx.transaction_type)
-        ? tx.transaction_type
-        : 'other'
-
-      const { error: insertError } = await supabase
-        .from('financial_transactions')
-        .insert({
-          document_id: documentId,
-          chunk_id: chunkId,
-          extraction_id: extractionId,
-          from_entity_id: fromEntityId,
-          from_raw: tx.from_name,
-          to_entity_id: toEntityId,
-          to_raw: tx.to_name,
-          amount: tx.amount,
-          currency: tx.currency,
-          transaction_date: tx.transaction_date,
-          transaction_type: txType,
-          description: tx.description,
-          is_suspicious: isSuspicious,
-          suspicious_reasons: tx.suspicious_indicators,
-          shell_company_involved: shellCompanyInvolved,
-          confidence: tx.confidence,
-        })
-
-      if (insertError) {
-        console.warn(`[FinancialExtractor] Insert failed: ${insertError.message}`)
-      } else {
-        inserted++
-      }
+    if (insertError) {
+      console.warn(`[FinancialExtractor] Insert failed: ${insertError.message}`)
+    } else {
+      inserted++
     }
-
-    console.log(`[FinancialExtractor] ${documentId}: inserted ${inserted}/${transactions.length} transactions`)
-    return { success: true }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error(`[FinancialExtractor] Error on ${documentId}:`, msg)
-    return { success: false, error: msg }
   }
+
+  console.log(`[FinancialExtractor] ${documentId}: inserted ${inserted}/${transactions.length} transactions`)
 }
 
 // --- Batch service class ---
@@ -305,14 +300,17 @@ export class FinancialExtractorService {
     error?: string
     transactionCount?: number
   }> {
-    const result = await handleFinancialExtract(documentId, this.supabase)
-    if (!result.success) return result
+    try {
+      await handleFinancialExtract(documentId, this.supabase)
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
 
     const { count } = await this.supabase
       .from('financial_transactions')
       .select('id', { count: 'exact', head: true })
       .eq('document_id', documentId)
 
-    return { ...result, transactionCount: count || 0 }
+    return { success: true, transactionCount: count || 0 }
   }
 }

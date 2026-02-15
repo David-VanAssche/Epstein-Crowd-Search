@@ -126,8 +126,8 @@ export async function handleStructuredExtraction(
 ): Promise<void> {
   console.log(`[StructuredExtract] Processing document ${documentId}`)
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY
-  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY not set')
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
   const { data: doc, error } = await supabase
     .from('documents')

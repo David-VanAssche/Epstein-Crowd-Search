@@ -58,6 +58,13 @@ AS $$
     (SELECT count(*) FROM audio_files);
 $$;
 
+-- Add description column to data_sources for authoritative source context
+ALTER TABLE data_sources ADD COLUMN IF NOT EXISTS description TEXT;
+
+-- Allow anonymous users to create contributions (checkout happens before auth)
+CREATE POLICY "Anyone can create contributions" ON contributions
+  FOR INSERT WITH CHECK (true);
+
 -- Helper: append a stage to completed_stages if not already present.
 -- Uses deduplication to be safe under concurrent calls.
 CREATE OR REPLACE FUNCTION append_completed_stage(p_document_id UUID, p_stage TEXT)
