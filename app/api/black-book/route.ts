@@ -1,5 +1,6 @@
 // app/api/black-book/route.ts
-// Queries address_book_entry extractions for the Black Book Browser.
+// Queries entities with blackbook source metadata for the Black Book Browser.
+// Falls back to structured_data_extractions for pipeline-extracted entries.
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { paginated, handleApiError } from '@/lib/api/responses'
@@ -16,70 +17,88 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createClient()
 
-    let query = supabase
+    // Query 1: Entities with blackbook metadata (from community import)
+    let entityQuery = supabase
+      .from('entities')
+      .select('id, name, entity_type, risk_score, metadata', { count: 'exact' })
+      .eq('metadata->>source', 'blackbook')
+      .order('name', { ascending: true })
+      .range(offset, offset + perPage - 1)
+
+    if (search.length > 0) {
+      entityQuery = entityQuery.ilike('name', `%${search}%`)
+    }
+    if (letter && /^[A-Z]$/i.test(letter)) {
+      entityQuery = entityQuery.ilike('name', `${letter.toUpperCase()}%`)
+    }
+
+    const { data: entities, count: entityCount, error: entityError } = await entityQuery
+
+    if (entityError) {
+      console.warn(`[BlackBook] Entity query failed: ${entityError.message}`)
+    }
+
+    // Query 2: structured_data_extractions for pipeline-extracted entries
+    let extractionQuery = supabase
       .from('structured_data_extractions')
       .select('id, document_id, extracted_data, created_at', { count: 'exact' })
       .eq('extraction_type', 'address_book_entry')
       .order('created_at', { ascending: true })
-      .range(offset, offset + perPage - 1)
 
-    // Text search on name within extracted_data JSONB (sanitized above)
     if (search.length > 0) {
-      query = query.ilike('extracted_data->>name', `%${search}%`)
+      extractionQuery = extractionQuery.ilike('extracted_data->>name', `%${search}%`)
     }
-
-    // Alphabet filter
     if (letter && /^[A-Z]$/i.test(letter)) {
-      query = query.ilike('extracted_data->>name', `${letter.toUpperCase()}%`)
+      extractionQuery = extractionQuery.ilike('extracted_data->>name', `${letter.toUpperCase()}%`)
     }
 
-    const { data: entries, count, error } = await query
+    const { data: extractions, count: extractionCount } = await extractionQuery
 
-    if (error) {
-      throw new Error(`Black book query failed: ${error.message}`)
+    // Merge results: entities first, then extractions (deduplicated by name)
+    const seenNames = new Set<string>()
+    const results: any[] = []
+
+    // Add entity-sourced entries
+    for (const entity of entities || []) {
+      const meta = (entity.metadata || {}) as Record<string, any>
+      seenNames.add(entity.name.toLowerCase())
+      results.push({
+        id: entity.id,
+        document_id: null,
+        name: entity.name,
+        phones: meta.phones || [],
+        addresses: meta.addresses || [],
+        emails: meta.emails || [],
+        relationships: meta.relationships || [],
+        notes: meta.notes || null,
+        linked_entity: {
+          id: entity.id,
+          entity_type: entity.entity_type,
+          risk_score: entity.risk_score || 0,
+        },
+      })
     }
 
-    // Entity linking: try to match names to entities
-    const names = (entries || [])
-      .map((e: any) => e.extracted_data?.name)
-      .filter(Boolean)
-
-    let entityMap = new Map<string, { id: string; entity_type: string; risk_score: number }>()
-
-    if (names.length > 0) {
-      const { data: matchedEntities, error: matchError } = await supabase
-        .from('entities')
-        .select('id, name, name_normalized, entity_type, risk_score')
-        .in('name', names)
-
-      if (matchError) {
-        console.warn(`[BlackBook] Entity matching failed: ${matchError.message}`)
-      }
-
-      if (matchedEntities) {
-        for (const e of matchedEntities as any[]) {
-          entityMap.set(e.name, { id: e.id, entity_type: e.entity_type, risk_score: e.risk_score || 0 })
-        }
-      }
-    }
-
-    // Enrich entries with entity links
-    const enriched = (entries || []).map((entry: any) => {
-      const name = entry.extracted_data?.name || ''
-      const linked = entityMap.get(name)
-      return {
-        id: entry.id,
-        document_id: entry.document_id,
+    // Add extraction-sourced entries (pipeline), deduplicated
+    for (const ext of extractions || []) {
+      const name = ext.extracted_data?.name || ''
+      if (seenNames.has(name.toLowerCase())) continue
+      seenNames.add(name.toLowerCase())
+      results.push({
+        id: ext.id,
+        document_id: ext.document_id,
         name,
-        phones: entry.extracted_data?.phones || [],
-        addresses: entry.extracted_data?.addresses || [],
-        relationships: entry.extracted_data?.relationships || [],
-        notes: entry.extracted_data?.notes || null,
-        linked_entity: linked || null,
-      }
-    })
+        phones: ext.extracted_data?.phones || [],
+        addresses: ext.extracted_data?.addresses || [],
+        emails: ext.extracted_data?.emails || [],
+        relationships: ext.extracted_data?.relationships || [],
+        notes: ext.extracted_data?.notes || null,
+        linked_entity: null,
+      })
+    }
 
-    return paginated(enriched, page, perPage, count || 0)
+    const totalCount = (entityCount || 0) + (extractionCount || 0)
+    return paginated(results, page, perPage, totalCount)
   } catch (err) {
     return handleApiError(err)
   }

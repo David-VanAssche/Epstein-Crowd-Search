@@ -105,6 +105,7 @@ async function importBlackbook(): Promise<void> {
             name,
             name_normalized: normalizeEntityName(name),
             entity_type: 'person',
+            source: 'blackbook',
             metadata: {
               source: 'blackbook',
               phones: entry.phones || entry.phone ? [entry.phone] : [],
@@ -136,6 +137,7 @@ async function importBlackbook(): Promise<void> {
             name,
             name_normalized: normalizeEntityName(name),
             entity_type: 'person',
+            source: 'blackbook',
             metadata,
           })
         }
@@ -374,6 +376,7 @@ async function importEpsteinExposed(): Promise<void> {
             name,
             name_normalized: normalizeEntityName(name),
             entity_type: record.entity_type || 'person',
+            source: 'epstein-exposed',
             metadata: {
               source: 'epstein-exposed',
               ...(record.location && { location: record.location }),

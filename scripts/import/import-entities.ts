@@ -94,6 +94,7 @@ async function upsertEntity(
     await supabase
       .from('entities')
       .update({
+        source: sources.join(','),
         metadata: { ...existingMeta, sources },
         aliases,
         mention_count: ((existing.mention_count as number) || 0) + 1,
@@ -115,6 +116,7 @@ async function upsertEntity(
       description: (extra.description as string) || null,
       mention_count: 1,
       document_count: (extra.document_count as number) || 0,
+      source,
       metadata: { sources: [source], ...(extra.metadata as Record<string, unknown> || {}) },
     })
 
