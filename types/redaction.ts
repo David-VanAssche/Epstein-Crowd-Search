@@ -22,6 +22,7 @@ export type EvidenceType =
   | 'document_comparison'
   | 'official_release'
   | 'media_report'
+  | 'cascade'
   | 'other'
 
 export type ProposalStatus =

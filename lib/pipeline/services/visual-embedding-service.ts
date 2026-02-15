@@ -57,7 +57,7 @@ export async function handleVisualEmbed(
   console.log(`[VisualEmbed] Processing images for document ${documentId}`)
 
   if (!process.env.AWS_ACCESS_KEY_ID) throw new Error('AWS_ACCESS_KEY_ID not set')
-  const geminiKey = process.env.GOOGLE_AI_API_KEY // Optional: for descriptions
+  const geminiKey = process.env.GEMINI_API_KEY // Optional: for descriptions
 
   const { data: images, error } = await supabase
     .from('images')
@@ -79,7 +79,7 @@ export async function handleVisualEmbed(
 
     try {
       const { data: fileData, error: dlError } = await supabase.storage
-        .from('images')
+        .from('raw-archive')
         .download((image as any).storage_path)
 
       if (dlError || !fileData) {

@@ -7,7 +7,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 const GEMINI_MODEL = 'gemini-2.0-flash'
 
 const RELEVANT_CLASSIFICATIONS = [
-  'correspondence', 'email', 'memo', 'letter',
+  'correspondence', 'email', 'memo', 'letter', 'fax',
 ] as const
 
 interface ExtractedEmail {
@@ -176,122 +176,116 @@ async function resolveParticipants(
 export async function handleEmailExtract(
   documentId: string,
   supabase: SupabaseClient
-): Promise<{ success: boolean; error?: string }> {
+): Promise<void> {
   console.log(`[EmailExtractor] Processing document ${documentId}`)
 
   const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) return { success: false, error: 'GEMINI_API_KEY not set' }
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
-  try {
-    // Check document classification
-    const { data: doc, error: docError } = await supabase
-      .from('documents')
-      .select('id, classification')
-      .eq('id', documentId)
-      .single()
+  // Check document classification
+  const { data: doc, error: docError } = await supabase
+    .from('documents')
+    .select('id, classification')
+    .eq('id', documentId)
+    .single()
 
-    if (docError || !doc) {
-      return { success: false, error: `Document not found: ${docError?.message}` }
-    }
-
-    const classification = (doc as any).classification
-    if (!RELEVANT_CLASSIFICATIONS.includes(classification)) {
-      return { success: true } // Not relevant, skip silently
-    }
-
-    // Idempotency check
-    const { count } = await supabase
-      .from('emails')
-      .select('id', { count: 'exact', head: true })
-      .eq('document_id', documentId)
-
-    if (count && count > 0) {
-      console.log(`[EmailExtractor] Skipping ${documentId} — ${count} emails already exist`)
-      return { success: true }
-    }
-
-    // Fetch chunks
-    const { data: chunks, error: chunksError } = await supabase
-      .from('chunks')
-      .select('id, content')
-      .eq('document_id', documentId)
-      .order('chunk_index', { ascending: true })
-
-    if (chunksError || !chunks || chunks.length === 0) {
-      return { success: false, error: `No chunks found: ${chunksError?.message}` }
-    }
-
-    // Extract emails
-    const combinedText = chunks.map((c: any) => c.content).join('\n\n---\n\n')
-    const extracted = await callGemini(combinedText, apiKey)
-
-    if (extracted.length === 0) {
-      console.log(`[EmailExtractor] ${documentId}: no emails found`)
-      return { success: true }
-    }
-
-    // Create extraction record
-    const avgConfidence = extracted.reduce((s, e) => s + e.confidence, 0) / extracted.length
-    const { data: extraction } = await supabase
-      .from('structured_data_extractions')
-      .insert({
-        document_id: documentId,
-        extraction_type: 'email',
-        extracted_data: { emails: extracted },
-        confidence: avgConfidence,
-      })
-      .select('id')
-      .single()
-
-    const extractionId = extraction ? (extraction as any).id : null
-
-    // Insert each email
-    let inserted = 0
-    for (let i = 0; i < extracted.length; i++) {
-      const email = extracted[i]
-
-      const fromEntityId = await resolveEntityByName(email.from_raw, supabase)
-      const toEntityIds = await resolveParticipants(email.to_raw, supabase)
-      const ccEntityIds = await resolveParticipants(email.cc_raw, supabase)
-      const bccEntityIds = await resolveParticipants(email.bcc_raw, supabase)
-
-      const { error: insertError } = await supabase.from('emails').insert({
-        document_id: documentId,
-        chunk_id: i < chunks.length ? (chunks[i] as any).id : (chunks[0] as any).id,
-        extraction_id: extractionId,
-        message_id: email.message_id,
-        thread_id: email.thread_id,
-        in_reply_to: email.in_reply_to,
-        subject: email.subject,
-        sent_date: email.sent_date,
-        from_raw: email.from_raw,
-        from_entity_id: fromEntityId,
-        to_raw: email.to_raw,
-        to_entity_ids: toEntityIds,
-        cc_raw: email.cc_raw,
-        cc_entity_ids: ccEntityIds,
-        bcc_raw: email.bcc_raw,
-        bcc_entity_ids: bccEntityIds,
-        body: email.body,
-        has_attachments: email.has_attachments,
-        attachment_filenames: email.attachment_filenames,
-        confidence: email.confidence,
-      })
-
-      if (insertError) {
-        console.warn(`[EmailExtractor] Insert failed for email ${i + 1}: ${insertError.message}`)
-      } else {
-        inserted++
-      }
-    }
-
-    console.log(`[EmailExtractor] ${documentId}: inserted ${inserted}/${extracted.length} emails`)
-    return { success: true }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error(`[EmailExtractor] Error on ${documentId}:`, msg)
-    return { success: false, error: msg }
+  if (docError || !doc) {
+    throw new Error(`Document not found: ${docError?.message}`)
   }
+
+  const classification = ((doc as any).classification || '').toLowerCase()
+  if (!RELEVANT_CLASSIFICATIONS.includes(classification as any)) {
+    console.log(`[EmailExtractor] Skipping ${documentId} — classification "${classification}" not relevant`)
+    return
+  }
+
+  // Idempotency check
+  const { count } = await supabase
+    .from('emails')
+    .select('id', { count: 'exact', head: true })
+    .eq('document_id', documentId)
+
+  if (count && count > 0) {
+    console.log(`[EmailExtractor] Skipping ${documentId} — ${count} emails already exist`)
+    return
+  }
+
+  // Fetch chunks
+  const { data: chunks, error: chunksError } = await supabase
+    .from('chunks')
+    .select('id, content')
+    .eq('document_id', documentId)
+    .order('chunk_index', { ascending: true })
+
+  if (chunksError || !chunks || chunks.length === 0) {
+    throw new Error(`No chunks found: ${chunksError?.message}`)
+  }
+
+  // Extract emails
+  const combinedText = chunks.map((c: any) => c.content).join('\n\n---\n\n')
+  const extracted = await callGemini(combinedText, apiKey)
+
+  if (extracted.length === 0) {
+    console.log(`[EmailExtractor] ${documentId}: no emails found`)
+    return
+  }
+
+  // Create extraction record
+  const avgConfidence = extracted.reduce((s, e) => s + e.confidence, 0) / extracted.length
+  const { data: extraction } = await supabase
+    .from('structured_data_extractions')
+    .insert({
+      document_id: documentId,
+      extraction_type: 'email',
+      extracted_data: { emails: extracted },
+      confidence: avgConfidence,
+    })
+    .select('id')
+    .single()
+
+  const extractionId = extraction ? (extraction as any).id : null
+
+  // Insert each email
+  let inserted = 0
+  for (let i = 0; i < extracted.length; i++) {
+    const email = extracted[i]
+
+    const fromEntityId = await resolveEntityByName(email.from_raw, supabase)
+    const toEntityIds = await resolveParticipants(email.to_raw, supabase)
+    const ccEntityIds = await resolveParticipants(email.cc_raw, supabase)
+    const bccEntityIds = await resolveParticipants(email.bcc_raw, supabase)
+
+    const { error: insertError } = await supabase.from('emails').insert({
+      document_id: documentId,
+      chunk_id: i < chunks.length ? (chunks[i] as any).id : (chunks[0] as any).id,
+      extraction_id: extractionId,
+      message_id: email.message_id,
+      thread_id: email.thread_id,
+      in_reply_to: email.in_reply_to,
+      subject: email.subject,
+      sent_date: email.sent_date,
+      from_raw: email.from_raw,
+      from_entity_id: fromEntityId,
+      to_raw: email.to_raw,
+      to_entity_ids: toEntityIds,
+      cc_raw: email.cc_raw,
+      cc_entity_ids: ccEntityIds,
+      bcc_raw: email.bcc_raw,
+      bcc_entity_ids: bccEntityIds,
+      body: email.body,
+      has_attachments: email.has_attachments,
+      attachment_filenames: email.attachment_filenames,
+      confidence: email.confidence,
+    })
+
+    if (insertError) {
+      console.warn(`[EmailExtractor] Insert failed for email ${i + 1}: ${insertError.message}`)
+    } else {
+      inserted++
+    }
+  }
+
+  console.log(`[EmailExtractor] ${documentId}: inserted ${inserted}/${extracted.length} emails`)
 }
 
 // --- Batch service class ---
@@ -308,14 +302,17 @@ export class EmailExtractorService {
     error?: string
     emailCount?: number
   }> {
-    const result = await handleEmailExtract(documentId, this.supabase)
-    if (!result.success) return result
+    try {
+      await handleEmailExtract(documentId, this.supabase)
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
 
     const { count } = await this.supabase
       .from('emails')
       .select('id', { count: 'exact', head: true })
       .eq('document_id', documentId)
 
-    return { ...result, emailCount: count || 0 }
+    return { success: true, emailCount: count || 0 }
   }
 }

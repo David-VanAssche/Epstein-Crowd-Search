@@ -27,6 +27,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const supabase = await createClient()
 
+    // Check redaction status — reject votes on already-resolved redactions
+    const { data: redaction, error: redactionError } = await supabase
+      .from('redactions')
+      .select('id, status')
+      .eq('id', redactionId)
+      .single()
+
+    if (redactionError || !redaction) {
+      return notFound('Redaction not found')
+    }
+
+    if (redaction.status === 'confirmed' || redaction.status === 'disputed') {
+      return error('This redaction is no longer accepting votes', 400)
+    }
+
     // Verify the proposal exists and belongs to this redaction
     const { data: proposal, error: proposalError } = await supabase
       .from('redaction_proposals')
@@ -76,18 +91,32 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       target_proposal_id: input.proposal_id,
     })
 
-    // If corroborations >= 3, update redaction status to 'corroborated'
+    // If corroborations >= 3, update redaction status to 'corroborated' via SECURITY DEFINER
     if (corroborations >= 3) {
-      await supabase
-        .from('redactions')
-        .update({ status: 'corroborated', updated_at: new Date().toISOString() })
-        .eq('id', redactionId)
-        .in('status', ['unsolved', 'proposed'])
+      await supabase.rpc('transition_redaction_status', {
+        p_redaction_id: redactionId,
+        p_new_status: 'corroborated',
+        p_allowed_from: ['unsolved', 'proposed'],
+      })
     }
+
+    // Attempt auto-confirm + cascade via atomic SQL function
+    const { data: confirmResult } = await supabase.rpc('auto_confirm_and_cascade', {
+      p_proposal_id: input.proposal_id,
+      p_redaction_id: redactionId,
+      p_system_user_id: process.env.SYSTEM_CASCADE_USER_ID || '00000000-0000-4000-a000-000000000001',
+    })
+
+    const autoConfirmData = confirmResult as {
+      confirmed?: boolean
+      cascade_count?: number
+    } | null
 
     return success({
       vote,
       proposal_votes: { upvotes, downvotes, corroborations },
+      auto_confirmed: autoConfirmData?.confirmed ?? false,
+      cascade_count: autoConfirmData?.cascade_count ?? 0,
     })
   } catch (err) {
     return handleApiError(err)

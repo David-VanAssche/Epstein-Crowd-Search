@@ -323,6 +323,14 @@ export async function handleChunk(
         hierarchy_path: chunk.hierarchyPath,
         char_count: chunk.charCount,
         token_count_estimate: chunk.tokenCountEstimate,
+        // Content heuristic flags for classification-driven routing fallback.
+        // These are intentionally broad — false positives waste a cheap LLM call,
+        // false negatives miss data permanently.
+        has_email_headers: /^\s*(From|To|Subject|Sent|CC|BCC)\s*:/im.test(chunk.content),
+        has_financial_amounts: /[\$€£]\s?\(?\d{1,3}(?:,\d{3})*(?:\.\d{2})?\)?|\b\d{1,3}(?:,\d{3})+\.\d{2}\b/.test(chunk.content),
+        has_redaction_markers: /\[(REDACTED|SEALED|REDACTION|\*{3,})\]|█{3,}|X{5,}/i.test(chunk.content),
+        // Heuristic — may match invalid dates (e.g., Feb 31). Acceptable for routing.
+        has_date_references: /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b|\b\d{4}-\d{2}-\d{2}\b/.test(chunk.content),
       }))
 
       const { error: insertError } = await supabase.from('chunks').insert(batch)

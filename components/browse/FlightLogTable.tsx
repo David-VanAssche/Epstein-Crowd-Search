@@ -11,7 +11,10 @@ interface Flight {
   origin: string | null
   destination: string | null
   passengers: string[]
-  document_id: string
+  pilot: string | null
+  tail_number: string | null
+  source: string | null
+  document_id: string | null
   page_number: number | null
 }
 
@@ -27,8 +30,7 @@ export function FlightLogTable({ flights }: FlightLogTableProps) {
           <TableRow>
             <TableHead>Date</TableHead>
             <TableHead>Aircraft</TableHead>
-            <TableHead>Origin</TableHead>
-            <TableHead>Destination</TableHead>
+            <TableHead>Route</TableHead>
             <TableHead>Passengers</TableHead>
             <TableHead>Source</TableHead>
           </TableRow>
@@ -37,17 +39,33 @@ export function FlightLogTable({ flights }: FlightLogTableProps) {
           {flights.map((flight) => (
             <TableRow key={flight.id}>
               <TableCell className="whitespace-nowrap">{flight.date || '—'}</TableCell>
-              <TableCell>{flight.aircraft || '—'}</TableCell>
-              <TableCell>{flight.origin || '—'}</TableCell>
-              <TableCell>{flight.destination || '—'}</TableCell>
-              <TableCell>{flight.passengers.join(', ') || '—'}</TableCell>
               <TableCell>
-                <Link
-                  href={`/document/${flight.document_id}${flight.page_number ? `#page-${flight.page_number}` : ''}`}
-                  className="text-blue-400 hover:underline"
-                >
-                  View
-                </Link>
+                <div>{flight.aircraft || '—'}</div>
+                {flight.tail_number && (
+                  <div className="text-xs text-muted-foreground">{flight.tail_number}</div>
+                )}
+              </TableCell>
+              <TableCell>
+                {flight.origin || flight.destination
+                  ? `${flight.origin || '?'} → ${flight.destination || '?'}`
+                  : '—'}
+              </TableCell>
+              <TableCell className="max-w-xs">
+                <div className="line-clamp-2 text-sm">
+                  {flight.passengers.length > 0 ? flight.passengers.join(', ') : '—'}
+                </div>
+              </TableCell>
+              <TableCell>
+                {flight.document_id ? (
+                  <Link
+                    href={`/document/${flight.document_id}${flight.page_number ? `#page-${flight.page_number}` : ''}`}
+                    className="text-blue-400 hover:underline"
+                  >
+                    View doc
+                  </Link>
+                ) : (
+                  <span className="text-xs text-muted-foreground">{flight.source || 'imported'}</span>
+                )}
               </TableCell>
             </TableRow>
           ))}

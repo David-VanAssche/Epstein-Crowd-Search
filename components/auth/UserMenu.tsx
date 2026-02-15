@@ -7,6 +7,7 @@ import {
   Search,
   LogOut,
   LogIn,
+  UserPlus,
   ChevronsUpDown,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -31,12 +32,20 @@ export function UserMenu() {
 
   if (!user) {
     return (
-      <SidebarMenuButton asChild tooltip="Sign In">
-        <Link href="/login">
-          <LogIn className="h-4 w-4" />
-          <span>Sign In</span>
-        </Link>
-      </SidebarMenuButton>
+      <div className="flex flex-col gap-1">
+        <SidebarMenuButton asChild tooltip="Sign In">
+          <Link href="/login">
+            <LogIn className="h-4 w-4" />
+            <span>Sign In</span>
+          </Link>
+        </SidebarMenuButton>
+        <SidebarMenuButton asChild tooltip="Create Account">
+          <Link href="/login?view=signup">
+            <UserPlus className="h-4 w-4" />
+            <span>Create Account</span>
+          </Link>
+        </SidebarMenuButton>
+      </div>
     )
   }
 

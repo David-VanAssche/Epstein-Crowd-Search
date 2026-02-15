@@ -27,12 +27,18 @@ export function UserQuickPanel() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Sign in to save searches, bookmark documents, propose redaction
+            Create an account to save searches, bookmark documents, propose redaction
             solutions, and earn recognition for your contributions.
           </p>
           <Button asChild className="w-full">
-            <Link href="/login">Sign In</Link>
+            <Link href="/login?view=signup">Create Account</Link>
           </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            Already have an account?{' '}
+            <Link href="/login" className="underline hover:text-foreground">
+              Sign in
+            </Link>
+          </p>
         </CardContent>
       </Card>
     )

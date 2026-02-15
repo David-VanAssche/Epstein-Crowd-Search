@@ -113,8 +113,8 @@ export async function handleContextualHeaders(
   if (chunkError || !chunks) throw new Error(`Failed to fetch chunks: ${chunkError?.message}`)
   if (chunks.length === 0) return
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY
-  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY not set')
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
   const headers = await generateContextualHeaders(
     chunks as ChunkRow[],

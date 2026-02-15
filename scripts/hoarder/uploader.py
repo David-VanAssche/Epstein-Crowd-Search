@@ -7,6 +7,8 @@ import hashlib
 import json
 import os
 import mimetypes
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,28 +51,52 @@ def file_sha256(filepath: str) -> str:
     return h.hexdigest()
 
 
+# Thread-local storage for reusing Supabase clients (avoids creating a new TCP connection per file)
+_thread_local = threading.local()
+
+MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "3"))
+
+
+def _get_thread_client(url: str, key: str) -> Client:
+    """Get or create a per-thread Supabase client."""
+    if not hasattr(_thread_local, "client") or _thread_local.client is None:
+        _thread_local.client = create_client(url, key)
+    return _thread_local.client
+
+
 def upload_file_worker(url: str, key: str, local_path: str, remote_path: str) -> tuple[str, bool, int, str]:
     """
-    Upload a single file to Supabase Storage. Thread-safe (creates its own client).
+    Upload a single file to Supabase Storage with retry + exponential backoff.
+    Reuses a per-thread client to avoid connection exhaustion.
     Returns (remote_path, success, file_size, error_msg).
     """
     file_size = os.path.getsize(local_path)
     mime_type = mimetypes.guess_type(local_path)[0] or "application/octet-stream"
 
-    try:
-        client = create_client(url, key)
-        with open(local_path, "rb") as f:
-            client.storage.from_(BUCKET_NAME).upload(
-                path=remote_path,
-                file=f.read(),
-                file_options={"content-type": mime_type, "upsert": "true"},
-            )
-        return (remote_path, True, file_size, "")
-    except Exception as e:
-        error_msg = str(e)
-        if "already exists" in error_msg.lower() or "duplicate" in error_msg.lower():
+    last_error = ""
+    for attempt in range(MAX_RETRIES):
+        try:
+            client = _get_thread_client(url, key)
+            with open(local_path, "rb") as f:
+                client.storage.from_(BUCKET_NAME).upload(
+                    path=remote_path,
+                    file=f.read(),
+                    file_options={"content-type": mime_type, "upsert": "true"},
+                )
             return (remote_path, True, file_size, "")
-        return (remote_path, False, file_size, error_msg)
+        except Exception as e:
+            last_error = str(e)
+            if "already exists" in last_error.lower() or "duplicate" in last_error.lower():
+                return (remote_path, True, file_size, "")
+            if "InvalidKey" in last_error:
+                return (remote_path, False, file_size, last_error)
+            # Reset client on connection errors so next attempt gets a fresh connection
+            _thread_local.client = None
+            if attempt < MAX_RETRIES - 1:
+                backoff = (2 ** attempt) + (time.monotonic() % 1)  # 1-2s, 2-3s, 4-5s
+                time.sleep(backoff)
+
+    return (remote_path, False, file_size, last_error)
 
 
 def build_local_manifest(local_dir: str, skip_dirs: set | None = None,
@@ -212,13 +238,25 @@ def upload_directory(client: Client, local_dir: str, remote_prefix: str,
         task = progress.add_task("Uploading", total=len(to_upload), uploaded_mb=0)
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = {
-                executor.submit(upload_file_worker, url, key, lp, rp): (lp, rp, sz)
-                for lp, rp, sz in to_upload
-            }
+            # Submit in batches to avoid building a 500K+ futures dict upfront
+            batch_size = workers * 4
+            idx = 0
+            futures = {}
 
-            for future in as_completed(futures):
-                remote_path, success, file_size, error_msg = future.result()
+            def refill():
+                nonlocal idx
+                while len(futures) < batch_size and idx < len(to_upload):
+                    lp, rp, sz = to_upload[idx]
+                    fut = executor.submit(upload_file_worker, url, key, lp, rp)
+                    futures[fut] = (lp, rp, sz)
+                    idx += 1
+
+            refill()
+
+            while futures:
+                done = next(as_completed(futures))
+                _lp, _rp, _sz = futures.pop(done)
+                remote_path, success, file_size, error_msg = done.result()
 
                 if success:
                     stats["uploaded"] += 1
@@ -233,6 +271,7 @@ def upload_directory(client: Client, local_dir: str, remote_prefix: str,
                         console.print(f"[red]Failed: {remote_path}: {error_msg}[/red]")
 
                 progress.update(task, advance=1, uploaded_mb=stats["bytes"] / 1024 / 1024)
+                refill()
 
     # Upload the manifest as our verification receipt
     if source_key:

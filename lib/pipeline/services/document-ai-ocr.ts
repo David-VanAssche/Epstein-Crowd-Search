@@ -108,7 +108,7 @@ export async function handleOCR(
   // 1. Fetch document metadata
   const { data: doc, error: docError } = await supabase
     .from('documents')
-    .select('id, filename, file_type, mime_type, storage_path, ocr_text, ocr_source')
+    .select('id, filename, file_type, mime_type, storage_path, ocr_text, ocr_source, metadata')
     .eq('id', documentId)
     .single()
 
@@ -126,7 +126,7 @@ export async function handleOCR(
 
   // 2. Download file from Supabase Storage
   const { data: fileData, error: dlError } = await supabase.storage
-    .from('documents')
+    .from('raw-archive')
     .download(doc.storage_path)
 
   if (dlError || !fileData) {
@@ -137,8 +137,8 @@ export async function handleOCR(
   const mimeType = doc.mime_type || 'application/pdf'
 
   // 3. Run OCR
-  const apiKey = process.env.GOOGLE_AI_API_KEY
-  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY not set')
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
   const result = await runOCR(fileBuffer, mimeType, apiKey)
 
@@ -149,6 +149,7 @@ export async function handleOCR(
       ocr_text: result.fullText,
       page_count: result.pageCount,
       metadata: {
+        ...((doc as any).metadata || {}),
         ocr_confidence: result.averageConfidence,
         ocr_page_count: result.pageCount,
         ocr_timestamp: new Date().toISOString(),

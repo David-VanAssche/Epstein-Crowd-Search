@@ -101,8 +101,8 @@ export async function handleRelationshipMap(
 ): Promise<void> {
   console.log(`[RelMap] Processing document ${documentId}`)
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY
-  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY not set')
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
   // Get all chunks with their entity mentions
   const { data: chunks, error } = await supabase
@@ -149,10 +149,29 @@ export async function handleRelationshipMap(
         // Sort IDs to avoid duplicate A-B / B-A entries
         const [id1, id2] = [entityAId, entityBId].sort()
 
-        const { error: insertError } = await supabase
+        // Check for existing relationship to merge evidence arrays
+        const { data: existing } = await supabase
           .from('entity_relationships')
-          .upsert(
-            {
+          .select('id, evidence_chunk_ids, evidence_document_ids, strength')
+          .eq('entity_a_id', id1)
+          .eq('entity_b_id', id2)
+          .eq('relationship_type', rel.type)
+          .maybeSingle()
+
+        if (existing) {
+          // Merge evidence arrays (deduplicate)
+          const chunkIds = Array.from(new Set([...((existing as any).evidence_chunk_ids || []), (chunk as any).id]))
+          const docIds = Array.from(new Set([...((existing as any).evidence_document_ids || []), documentId]))
+          const strength = Math.max((existing as any).strength || 0, rel.confidence)
+          await supabase
+            .from('entity_relationships')
+            .update({ evidence_chunk_ids: chunkIds, evidence_document_ids: docIds, strength })
+            .eq('id', (existing as any).id)
+          totalRelationships++
+        } else {
+          const { error: insertError } = await supabase
+            .from('entity_relationships')
+            .insert({
               entity_a_id: id1,
               entity_b_id: id2,
               relationship_type: rel.type,
@@ -160,11 +179,9 @@ export async function handleRelationshipMap(
               evidence_chunk_ids: [(chunk as any).id],
               evidence_document_ids: [documentId],
               strength: rel.confidence,
-            },
-            { onConflict: 'entity_a_id,entity_b_id,relationship_type' }
-          )
-
-        if (!insertError) totalRelationships++
+            })
+          if (!insertError) totalRelationships++
+        }
       }
 
       await new Promise((r) => setTimeout(r, 300))

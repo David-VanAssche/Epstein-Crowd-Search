@@ -7,6 +7,12 @@ import { Lock } from 'lucide-react'
 
 export function AuthGateOverlay() {
   const [showAuth, setShowAuth] = useState(false)
+  const [defaultTab, setDefaultTab] = useState<'sign-in' | 'sign-up'>('sign-in')
+
+  const openWith = (tab: 'sign-in' | 'sign-up') => {
+    setDefaultTab(tab)
+    setShowAuth(true)
+  }
 
   return (
     <>
@@ -17,14 +23,20 @@ export function AuthGateOverlay() {
           <p className="text-sm text-muted-foreground">
             This feature requires an account. Sign in to contribute, save searches, and track your investigation.
           </p>
-          <Button onClick={() => setShowAuth(true)} className="w-full">
-            Sign In
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => openWith('sign-in')} className="flex-1">
+              Sign In
+            </Button>
+            <Button onClick={() => openWith('sign-up')} className="flex-1">
+              Sign Up
+            </Button>
+          </div>
         </div>
       </div>
       <AuthDialog
         open={showAuth}
         onOpenChange={setShowAuth}
+        defaultTab={defaultTab}
         contextMessage="Sign in to access this feature"
       />
     </>

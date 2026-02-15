@@ -63,30 +63,34 @@ export async function POST(request: NextRequest) {
       // Find the contribution by payment intent
       const { data: contribution } = await supabase
         .from('contributions')
-        .select('id, campaign_id, amount_cents')
+        .select('id, campaign_id, amount_cents, status')
         .eq('stripe_payment_intent_id', paymentIntentId)
         .single()
 
       if (contribution) {
-        // Mark as refunded
+        // Idempotency: skip if already fully refunded
+        if (contribution.status === 'refunded') {
+          return NextResponse.json({ received: true })
+        }
+
+        // Determine actual refund amount from Stripe (handles partial refunds)
+        // charge.amount_refunded is the cumulative refunded amount in cents
+        const refundedCents = (charge as any).amount_refunded || contribution.amount_cents
+        const isFullRefund = refundedCents >= contribution.amount_cents
+
+        // Update contribution status
         await supabase
           .from('contributions')
           .update({
-            status: 'refunded',
+            status: isFullRefund ? 'refunded' : 'partial_refund',
             updated_at: new Date().toISOString(),
           })
           .eq('id', contribution.id)
 
-        // Decrement campaign funded_amount
-        if (contribution.campaign_id) {
-          await supabase.rpc('allocate_contribution', {
-            p_contribution_id: contribution.id,
-          })
-          // Re-aggregate since the contribution is now refunded (excluded from SUM)
-          await supabase.rpc('recompute_funding_status')
-        }
-
-        // Recompute global funding status
+        // Recompute global funding status from all paid contributions
+        // This re-sums all contributions with status='paid', so a full refund
+        // (status='refunded') is automatically excluded. For partial refunds,
+        // the original amount_cents stays unchanged and is still counted.
         await supabase.rpc('recompute_funding_status')
       }
     }

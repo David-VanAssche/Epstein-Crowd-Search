@@ -8,8 +8,9 @@ test.describe('Search Page', () => {
 
   test('has search input field', async ({ page }) => {
     await page.goto('/search')
-    const input = page.locator('input[type="search"], input[placeholder*="search" i], input[name="q"]')
-    await expect(input.first()).toBeVisible()
+    // SearchBar uses aria-label="Search documents" on the input
+    const input = page.locator('input[aria-label="Search documents"]')
+    await expect(input).toBeVisible()
   })
 
   test('shows empty state without query', async ({ page }) => {

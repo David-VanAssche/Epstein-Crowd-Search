@@ -1,67 +1,100 @@
 // lib/pipeline/services/embedding-service.ts
 // Stage 5: Embedding — Generate 1024d Nova embeddings for all chunks.
-// Uses Amazon Nova Multimodal Embeddings v1 via AWS Bedrock.
-// Same model handles text, images, video, and audio in a unified 1024d space.
+// Uses Amazon Nova Multimodal Embeddings v1 via AWS Bedrock with proper SigV4 signing.
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import {
+  BedrockRuntimeClient,
+  InvokeModelCommand,
+} from '@aws-sdk/client-bedrock-runtime'
 import { EmbeddingCache } from './embedding-cache'
 
-export async function embedTexts(texts: string[]): Promise<number[][]> {
+function getBedrockClient(): BedrockRuntimeClient {
   const region = process.env.AWS_REGION || 'us-east-1'
-  const modelId = process.env.EMBEDDING_MODEL || 'amazon.nova-multimodal-embeddings-v1:0'
+  return new BedrockRuntimeClient({
+    region,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+      ...(process.env.AWS_SESSION_TOKEN && {
+        sessionToken: process.env.AWS_SESSION_TOKEN,
+      }),
+    },
+  })
+}
 
-  // Nova text embedding via Bedrock InvokeModel
+export async function embedTexts(texts: string[]): Promise<number[][]> {
+  const modelId = process.env.EMBEDDING_MODEL || 'amazon.nova-multimodal-embeddings-v1:0'
+  const client = getBedrockClient()
+
   const results: number[][] = []
-  for (const text of texts) {
+  for (let idx = 0; idx < texts.length; idx++) {
+    const text = texts[idx]
     const body = JSON.stringify({
       inputText: text,
       embeddingConfig: { outputEmbeddingLength: 1024 },
     })
 
-    const response = await fetch(
-      `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body,
+    const command = new InvokeModelCommand({
+      modelId,
+      contentType: 'application/json',
+      accept: 'application/json',
+      body: new TextEncoder().encode(body),
+    })
+
+    // Retry with backoff for throttling
+    let lastError: unknown
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const response = await client.send(command)
+        const responseBody = JSON.parse(new TextDecoder().decode(response.body))
+        if (!responseBody.embedding || !Array.isArray(responseBody.embedding)) {
+          throw new Error(`Invalid embedding response: missing embedding array`)
+        }
+        results.push(responseBody.embedding)
+        lastError = null
+        break
+      } catch (err: unknown) {
+        lastError = err
+        const errName = (err as { name?: string })?.name || ''
+        // Retry on throttling; fail fast on other errors
+        if (errName === 'ThrottlingException' || errName === 'ServiceUnavailableException') {
+          const delay = 1000 * Math.pow(2, attempt)
+          console.warn(`[Embed] Throttled on text ${idx + 1}/${texts.length}, retrying in ${delay}ms...`)
+          await new Promise(r => setTimeout(r, delay))
+          continue
+        }
+        throw err
       }
-    )
-
-    if (!response.ok) {
-      const errText = await response.text()
-      throw new Error(`Nova embedding failed (${response.status}): ${errText}`)
     }
-
-    const data = await response.json()
-    results.push(data.embedding)
+    if (lastError) throw lastError
   }
   return results
 }
 
 // For images: embed the raw image bytes directly (Nova supports image input natively)
 export async function embedImage(imageBase64: string, _mimeType: string): Promise<number[]> {
-  const region = process.env.AWS_REGION || 'us-east-1'
   const modelId = process.env.EMBEDDING_MODEL || 'amazon.nova-multimodal-embeddings-v1:0'
+  const client = getBedrockClient()
 
   const body = JSON.stringify({
     inputImage: imageBase64,
     embeddingConfig: { outputEmbeddingLength: 1024 },
   })
 
-  const response = await fetch(
-    `https://bedrock-runtime.${region}.amazonaws.com/model/${modelId}/invoke`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-    }
-  )
+  const command = new InvokeModelCommand({
+    modelId,
+    contentType: 'application/json',
+    accept: 'application/json',
+    body: new TextEncoder().encode(body),
+  })
 
-  if (!response.ok) throw new Error(`Nova image embedding failed: ${response.status}`)
-  const data = await response.json()
-  return data.embedding
+  const response = await client.send(command)
+  const responseBody = JSON.parse(new TextDecoder().decode(response.body))
+  if (!responseBody.embedding || !Array.isArray(responseBody.embedding)) {
+    throw new Error(`Invalid image embedding response: missing embedding array`)
+  }
+  return responseBody.embedding
 }
 
 function buildEmbeddingInput(content: string, contextualHeader: string | null): string {

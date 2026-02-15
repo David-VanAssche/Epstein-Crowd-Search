@@ -6,6 +6,7 @@ export interface AuthenticatedUser {
   id: string
   email: string | undefined
   user_metadata: Record<string, unknown>
+  app_metadata?: Record<string, unknown>
 }
 
 /**
@@ -28,6 +29,7 @@ export async function getUser(): Promise<AuthenticatedUser | null> {
     id: user.id,
     email: user.email,
     user_metadata: user.user_metadata,
+    app_metadata: user.app_metadata,
   }
 }
 
@@ -86,6 +88,23 @@ export async function requireTier(
 
   if (userTierLevel < requiredTierLevel) {
     return forbidden(`Requires ${minimumTier} tier or higher`)
+  }
+
+  return user
+}
+
+/**
+ * Requires admin role via tamper-proof app_metadata.
+ * app_metadata can only be set via service-role key, unlike user_profiles.tier
+ * which is user-writable. Use this for destructive/admin-only operations.
+ */
+export async function requireAdmin(): Promise<AuthenticatedUser | Response> {
+  const userOrResponse = await requireAuth()
+  if (userOrResponse instanceof Response) return userOrResponse
+
+  const user = userOrResponse
+  if (user.app_metadata?.role !== 'admin') {
+    return forbidden('Admin access required')
   }
 
   return user

@@ -62,6 +62,7 @@ export const proposalRequestSchema = z.object({
     'document_comparison',
     'official_release',
     'media_report',
+    'cascade',
     'other',
   ]),
   evidence_description: z.string().min(10, 'Please provide a detailed description').max(5000),

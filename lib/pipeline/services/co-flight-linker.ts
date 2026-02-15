@@ -222,10 +222,10 @@ export class CoFlightLinkerService {
   }
 }
 
-/** Pipeline stage handler (no-op per-document — use batch) */
+/** Pipeline stage handler (no-op per-document — use CoFlightLinkerService.generateAllLinks() for batch) */
 export async function handleCoFlightLinks(
   _documentId: string,
   _supabase: SupabaseClient
-): Promise<{ success: boolean; error?: string }> {
-  return { success: true }
+): Promise<void> {
+  // Co-flight links are a batch operation across all flights, not per-document
 }

@@ -2,6 +2,7 @@
 'use client'
 
 import { ThumbsUp, ThumbsDown, CheckCircle } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useRedactionProposals, useVoteOnProposal } from '@/lib/hooks/useRedaction'
@@ -15,6 +16,24 @@ export function ProposalVoting({ redactionId }: ProposalVotingProps) {
   const { mutate: vote, isPending } = useVoteOnProposal()
 
   if (isLoading || !proposals || proposals.length === 0) return null
+
+  const handleVote = (proposalId: string, voteType: 'upvote' | 'downvote' | 'corroborate') => {
+    vote(
+      { redactionId, proposalId, voteType },
+      {
+        onSuccess: (result) => {
+          toast.success('Vote recorded')
+          const data = result as { auto_confirmed?: boolean; cascade_count?: number } | undefined
+          if (data?.auto_confirmed) {
+            toast.success(
+              `Redaction confirmed! Cascaded to ${data.cascade_count ?? 0} similar redactions`,
+              { duration: 5000 }
+            )
+          }
+        },
+      }
+    )
+  }
 
   return (
     <div className="space-y-2">
@@ -30,9 +49,7 @@ export function ProposalVoting({ redactionId }: ProposalVotingProps) {
                 size="sm"
                 className="h-7 gap-1 text-xs"
                 disabled={isPending}
-                onClick={() =>
-                  vote({ redactionId, proposalId: proposal.id, voteType: 'upvote' })
-                }
+                onClick={() => handleVote(proposal.id, 'upvote')}
               >
                 <ThumbsUp className="h-3 w-3" /> {proposal.upvotes}
               </Button>
@@ -41,9 +58,7 @@ export function ProposalVoting({ redactionId }: ProposalVotingProps) {
                 size="sm"
                 className="h-7 gap-1 text-xs"
                 disabled={isPending}
-                onClick={() =>
-                  vote({ redactionId, proposalId: proposal.id, voteType: 'downvote' })
-                }
+                onClick={() => handleVote(proposal.id, 'downvote')}
               >
                 <ThumbsDown className="h-3 w-3" /> {proposal.downvotes}
               </Button>
@@ -52,9 +67,7 @@ export function ProposalVoting({ redactionId }: ProposalVotingProps) {
                 size="sm"
                 className="h-7 gap-1 text-xs text-green-400"
                 disabled={isPending}
-                onClick={() =>
-                  vote({ redactionId, proposalId: proposal.id, voteType: 'corroborate' })
-                }
+                onClick={() => handleVote(proposal.id, 'corroborate')}
               >
                 <CheckCircle className="h-3 w-3" /> {proposal.corroborations}
               </Button>
