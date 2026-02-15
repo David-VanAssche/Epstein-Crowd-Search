@@ -12,10 +12,13 @@ interface FlightRecord {
   id: string
   date: string | null
   aircraft: string | null
+  tail_number: string | null
   origin: string | null
   destination: string | null
+  pilot: string | null
   passengers: string[]
-  document_id: string
+  source: string | null
+  document_id: string | null
   page_number: number | null
 }
 

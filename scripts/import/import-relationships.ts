@@ -41,6 +41,51 @@ function normalizeEntityName(name: string): string {
     .trim()
 }
 
+// Map CSV relationship types to DB CHECK constraint values
+const VALID_TYPES = new Set([
+  'traveled_with', 'employed_by', 'associate_of', 'family_member',
+  'legal_representative', 'financial_connection', 'mentioned_together',
+  'witness_testimony', 'employer_of', 'guest_of', 'owns', 'controlled_by',
+  'beneficiary_of', 'investigated_by', 'prosecuted_by', 'victim_of',
+  'co_defendant', 'introduced_by', 'recruited_by', 'located_at',
+])
+
+const TYPE_MAP: Record<string, string> = {
+  'associate': 'associate_of',
+  'social-associate': 'associate_of',
+  'business-associate': 'associate_of',
+  'co-mentioned': 'mentioned_together',
+  'co-passenger': 'traveled_with',
+  'co-flight': 'traveled_with',
+  'financial-associate': 'financial_connection',
+  'financial-client': 'financial_connection',
+  'banking': 'financial_connection',
+  'employee': 'employed_by',
+  'family': 'family_member',
+  'legal-counsel': 'legal_representative',
+  'legal-action': 'prosecuted_by',
+  'prosecution': 'prosecuted_by',
+  'investigation': 'investigated_by',
+  'victim-perpetrator': 'victim_of',
+  'accused': 'victim_of',
+  'accused-by': 'victim_of',
+  'exploitation': 'victim_of',
+  'beneficiary': 'beneficiary_of',
+  'ownership': 'owns',
+  'founded': 'owns',
+}
+
+function mapRelationshipType(raw: string): string | null {
+  const lower = raw.toLowerCase().trim()
+  if (VALID_TYPES.has(lower)) return lower
+  if (TYPE_MAP[lower]) return TYPE_MAP[lower]
+  // If the "type" looks like a person name (contains spaces, starts uppercase),
+  // it's a CSV parsing artifact — skip it
+  if (/^[A-Z]/.test(raw) && raw.includes(' ')) return null
+  // Unknown type — fall back to associate_of
+  return 'associate_of'
+}
+
 async function downloadFile(path: string): Promise<string | null> {
   const { data, error } = await supabase.storage.from('raw-archive').download(path)
   if (error) {
@@ -116,11 +161,18 @@ async function importRelationshipsCSV(): Promise<number> {
       // Try various column name patterns
       const entityAName = row.entity_a || row.source || row.from || row.person_a || row.name_a || ''
       const entityBName = row.entity_b || row.target || row.to || row.person_b || row.name_b || ''
-      const relType = row.type || row.relationship_type || row.relationship || row.relation || 'associated'
+      const rawRelType = row.type || row.relationship_type || row.relationship || row.relation || 'associated'
+      const relType = mapRelationshipType(rawRelType)
       const strength = parseFloat(row.strength || row.weight || '0.5')
       const description = row.description || row.details || row.notes || ''
 
       if (!entityAName || !entityBName) {
+        skipped++
+        continue
+      }
+
+      if (!relType) {
+        // CSV parse artifact — type column contains a name
         skipped++
         continue
       }
@@ -148,7 +200,7 @@ async function importRelationshipsCSV(): Promise<number> {
         .upsert({
           entity_a_id: entityAId,
           entity_b_id: entityBId,
-          relationship_type: relType.toLowerCase(),
+          relationship_type: relType,
           description: description || null,
           strength: isNaN(strength) ? 0.5 : Math.min(1, Math.max(0, strength)),
           metadata: {
@@ -198,12 +250,15 @@ async function importRelationshipsJSONL(): Promise<number> {
 
       if (!entityAId || !entityBId || entityAId === entityBId) continue
 
+      const jsonRelType = mapRelationshipType(data.type || data.relationship_type || 'associate')
+      if (!jsonRelType) continue
+
       const { error } = await supabase
         .from('entity_relationships')
         .upsert({
           entity_a_id: entityAId,
           entity_b_id: entityBId,
-          relationship_type: (data.type || data.relationship_type || 'associated').toLowerCase(),
+          relationship_type: jsonRelType,
           description: data.description || null,
           strength: data.strength || 0.5,
           metadata: { source: 'epsteininvestigation.org' },
@@ -264,7 +319,7 @@ async function importFlightsAsRelationships(): Promise<number> {
           .upsert({
             entity_a_id: a.id,
             entity_b_id: b.id,
-            relationship_type: 'co-flight',
+            relationship_type: 'traveled_with',
             description: `Co-passengers on flight ${(flight as any).flight_date || 'unknown date'}`,
             strength: 0.8,
             metadata: {
