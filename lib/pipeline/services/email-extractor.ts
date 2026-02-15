@@ -7,7 +7,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 const GEMINI_MODEL = 'gemini-2.0-flash'
 
 const RELEVANT_CLASSIFICATIONS = [
-  'correspondence', 'email', 'memo', 'letter',
+  'correspondence', 'email', 'memo', 'letter', 'fax',
 ] as const
 
 interface ExtractedEmail {
@@ -193,8 +193,8 @@ export async function handleEmailExtract(
     throw new Error(`Document not found: ${docError?.message}`)
   }
 
-  const classification = (doc as any).classification
-  if (!RELEVANT_CLASSIFICATIONS.includes(classification)) {
+  const classification = ((doc as any).classification || '').toLowerCase()
+  if (!RELEVANT_CLASSIFICATIONS.includes(classification as any)) {
     console.log(`[EmailExtractor] Skipping ${documentId} — classification "${classification}" not relevant`)
     return
   }

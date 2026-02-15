@@ -295,26 +295,40 @@ function getDocumentProbativeWeight(classification: string): number {
     case 'deposition':
     case 'grand_jury_testimony':
     case 'witness_statement':
+    case 'plea_agreement':
       return 1.0
     // Tier 2: Official documents
     case 'court_filing':
+    case 'indictment':
+    case 'subpoena':
+    case 'search_warrant':
     case 'police_report':
     case 'fbi_report':
+    case 'government_report':
       return 0.7
     // Tier 3: Records
     case 'flight_log':
     case 'financial_record':
+    case 'tax_filing':
+    case 'trust_document':
     case 'phone_record':
     case 'medical_record':
-      return 0.4
-    // Tier 4: Informal
-    case 'correspondence':
+    case 'corporate_filing':
     case 'property_record':
+      return 0.4
+    // Tier 4: Correspondence
+    case 'correspondence':
+    case 'email':
+    case 'letter':
+    case 'memo':
+    case 'fax':
       return 0.2
     // Tier 5: Peripheral
     case 'address_book':
     case 'photograph':
     case 'news_clipping':
+    case 'calendar_schedule':
+    case 'receipt_invoice':
     default:
       return 0.1
   }

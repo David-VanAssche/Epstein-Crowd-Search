@@ -137,7 +137,7 @@ export async function handleStructuredExtraction(
 
   if (error || !doc || !(doc as any).ocr_text) return
 
-  const structuredTypes = ['flight_log', 'financial_record', 'phone_record', 'address_book']
+  const structuredTypes = ['flight_log', 'financial_record', 'phone_record', 'address_book', 'tax_filing', 'receipt_invoice', 'trust_document', 'corporate_filing']
   if (!structuredTypes.includes((doc as any).classification || '')) return
 
   const { type, records } = await extractStructuredData(

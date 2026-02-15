@@ -334,7 +334,7 @@ BEGIN
 
   -- 7. Batch insert cascade proposals only if within depth limit
   IF COALESCE((SELECT cascade_depth FROM redactions WHERE id = p_redaction_id), 0) < p_max_cascade_depth THEN
-    WITH similar AS (
+    WITH similar_redactions AS (
       SELECT
         r.id AS target_redaction_id,
         1 - (r.context_embedding <=> src.context_embedding)::FLOAT AS similarity
@@ -368,7 +368,7 @@ BEGIN
         s.similarity,
         true,
         'pending'
-      FROM similar s
+      FROM similar_redactions s
       ON CONFLICT (redaction_id, proposed_text)
         WHERE evidence_type = 'cascade' AND status = 'pending'
         DO NOTHING
@@ -384,7 +384,7 @@ BEGIN
       status = CASE WHEN r.status = 'unsolved' THEN 'proposed' ELSE r.status END,
       updated_at = now()
     FROM (
-      SELECT target_redaction_id FROM similar
+      SELECT target_redaction_id FROM similar_redactions
     ) s
     WHERE r.id = s.target_redaction_id
       AND r.status = 'unsolved';

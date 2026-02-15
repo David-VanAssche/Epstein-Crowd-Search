@@ -2,7 +2,7 @@
 // Runs a document through all pipeline stages sequentially.
 // Each stage is a function that takes a document ID and returns void.
 // The orchestrator handles retries, status updates, error reporting,
-// and tracks per-stage completion via the completed_stages array.
+// classification-driven routing, and tracks per-stage completion via completed_stages.
 
 import { SupabaseClient } from '@supabase/supabase-js'
 import {
@@ -11,7 +11,11 @@ import {
   getOrderedStages,
   stageToStatus,
   PROCESSING_STATUS,
+  DocumentClassification,
 } from './stages'
+import { DOCUMENT_TYPES, type DocumentType } from './services/classifier'
+
+const DOCUMENT_TYPE_SET = new Set<string>(DOCUMENT_TYPES)
 
 export interface StageHandler {
   (documentId: string, supabase: SupabaseClient): Promise<void>
@@ -30,6 +34,8 @@ export interface StageResult {
   durationMs: number
   error?: string
   retries: number
+  skipped?: boolean
+  skipReason?: string
 }
 
 export interface PipelineResult {
@@ -37,6 +43,7 @@ export interface PipelineResult {
   success: boolean
   stages: StageResult[]
   totalDurationMs: number
+  stagesSkippedByRouting: number
 }
 
 export type StageSkipCheck = (documentId: string, supabase: SupabaseClient) => Promise<boolean>
@@ -62,11 +69,66 @@ export class PipelineOrchestrator {
     this.skipChecks.set(stage, check)
   }
 
+  /** Build DocumentClassification from the database for routing decisions */
+  private async getDocumentClassification(
+    documentId: string,
+    includeHeuristics: boolean
+  ): Promise<DocumentClassification | null> {
+    const { data: doc } = await this.supabase
+      .from('documents')
+      .select('classification, classification_tags')
+      .eq('id', documentId)
+      .single()
+
+    if (!doc || !(doc as any).classification) return null
+
+    // Validate classification against known types
+    const rawClassification = ((doc as any).classification || '').toLowerCase().trim()
+    const validPrimary = DOCUMENT_TYPE_SET.has(rawClassification)
+      ? rawClassification
+      : 'other'
+
+    // Validate tags
+    const rawTags: string[] = (doc as any).classification_tags || []
+    const validTags = rawTags
+      .map((t) => t.toLowerCase().trim())
+      .filter((t) => DOCUMENT_TYPE_SET.has(t)) as DocumentType[]
+
+    let hasEmailHeaders = false
+    let hasFinancialAmounts = false
+    let hasRedactionMarkers = false
+    let hasDateReferences = false
+
+    // Use server-side RPC aggregation instead of fetching all chunk rows
+    if (includeHeuristics) {
+      const { data: heuristics } = await this.supabase
+        .rpc('get_document_heuristics', { p_document_id: documentId })
+
+      if (heuristics && Array.isArray(heuristics) && heuristics.length > 0) {
+        const h = heuristics[0] as any
+        hasEmailHeaders = !!h.has_email_headers
+        hasFinancialAmounts = !!h.has_financial_amounts
+        hasRedactionMarkers = !!h.has_redaction_markers
+        hasDateReferences = !!h.has_date_references
+      }
+    }
+
+    return {
+      primary: validPrimary as DocumentType,
+      tags: validTags,
+      hasEmailHeaders,
+      hasFinancialAmounts,
+      hasRedactionMarkers,
+      hasDateReferences,
+    }
+  }
+
   /** Run the full pipeline for a document */
   async processDocument(documentId: string): Promise<PipelineResult> {
     const startTime = Date.now()
     const results: StageResult[] = []
     let allSucceeded = true
+    let stagesSkippedByRouting = 0
 
     console.log(`[Pipeline] Starting processing for document ${documentId}`)
 
@@ -86,6 +148,10 @@ export class PipelineOrchestrator {
       stages = stages.filter((s) => filterSet.has(s))
     }
 
+    // Classification-driven routing: loaded after CLASSIFY, upgraded with heuristics after CHUNK
+    let classification: DocumentClassification | null = null
+    let classificationHasHeuristics = false
+
     for (const stage of stages) {
       // Skip stages already completed (from completed_stages array)
       if (completedStages.has(stage)) {
@@ -100,6 +166,43 @@ export class PipelineOrchestrator {
         continue
       }
 
+      // Load classification once CLASSIFY is done (without heuristics initially)
+      if (!classification && completedStages.has(PipelineStage.CLASSIFY)) {
+        const hasChunks = completedStages.has(PipelineStage.CHUNK)
+        classification = await this.getDocumentClassification(documentId, hasChunks)
+        classificationHasHeuristics = hasChunks
+      }
+
+      // Upgrade classification with heuristic flags once CHUNK completes
+      if (classification && !classificationHasHeuristics && completedStages.has(PipelineStage.CHUNK)) {
+        classification = await this.getDocumentClassification(documentId, true)
+        classificationHasHeuristics = true
+      }
+
+      // Classification-driven routing check
+      const stageDef = STAGE_DEFINITIONS.find((d) => d.stage === stage)
+      if (stageDef && !stageDef.alwaysRun && classification) {
+        const shouldRun = stageDef.shouldRun?.(classification) ?? true
+        if (!shouldRun) {
+          stagesSkippedByRouting++
+          console.log(
+            `[Pipeline] Stage ${stage} skipped for document ${documentId} (routing: primary=${classification.primary})`
+          )
+          results.push({
+            stage,
+            success: true,
+            durationMs: 0,
+            retries: 0,
+            skipped: true,
+            skipReason: `Not applicable for ${classification.primary}`,
+          })
+          // Mark as completed so it doesn't re-run on resume
+          await this.appendCompletedStage(documentId, stage)
+          completedStages.add(stage)
+          continue
+        }
+      }
+
       // Per-document skip check (custom logic beyond completed_stages)
       const skipCheck = this.skipChecks.get(stage)
       if (skipCheck) {
@@ -111,7 +214,6 @@ export class PipelineOrchestrator {
         }
       }
 
-      const stageDef = STAGE_DEFINITIONS.find((d) => d.stage === stage)
       const maxRetries = stageDef?.maxRetries ?? this.config.maxRetries
 
       // Update processing status
@@ -154,10 +256,10 @@ export class PipelineOrchestrator {
 
     const totalDurationMs = Date.now() - startTime
     console.log(
-      `[Pipeline] Document ${documentId} ${allSucceeded ? 'completed' : 'failed'} in ${totalDurationMs}ms`
+      `[Pipeline] Document ${documentId} ${allSucceeded ? 'completed' : 'failed'} in ${totalDurationMs}ms (${stagesSkippedByRouting} stages skipped by routing)`
     )
 
-    return { documentId, success: allSucceeded, stages: results, totalDurationMs }
+    return { documentId, success: allSucceeded, stages: results, totalDurationMs, stagesSkippedByRouting }
   }
 
   /** Run a single stage with retry logic */

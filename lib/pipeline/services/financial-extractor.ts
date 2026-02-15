@@ -8,7 +8,7 @@ const GEMINI_MODEL = 'gemini-2.0-flash'
 
 const RELEVANT_CLASSIFICATIONS = [
   'financial_record', 'tax_filing', 'trust_document',
-  'bank_record', 'check', 'invoice', 'receipt',
+  'corporate_filing', 'receipt_invoice',
 ] as const
 
 interface ExtractedTransaction {
@@ -170,7 +170,7 @@ export async function handleFinancialExtract(
     throw new Error(`Document not found: ${docError?.message}`)
   }
 
-  const classification = (doc as any).classification || 'unknown'
+  const classification = ((doc as any).classification || 'unknown').toLowerCase()
   if (!RELEVANT_CLASSIFICATIONS.includes(classification as any)) {
     console.log(`[FinancialExtractor] Skipping ${documentId} — classification "${classification}" not relevant`)
     return

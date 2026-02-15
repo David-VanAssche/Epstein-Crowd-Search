@@ -1,5 +1,7 @@
 // lib/pipeline/stages.ts
-// Defines all pipeline stages, their ordering, and dependencies.
+// Defines all pipeline stages, their ordering, dependencies, and routing rules.
+
+import type { DocumentType } from './services/classifier'
 
 export enum PipelineStage {
   OCR = 'ocr',
@@ -21,6 +23,55 @@ export enum PipelineStage {
   RISK_SCORE = 'risk_score',
 }
 
+// --- Classification-driven routing ---
+// Document classification determines which conditional stages run.
+// Stages marked alwaysRun=true run for all documents regardless of classification.
+
+/** Classification info used for routing decisions */
+export interface DocumentClassification {
+  primary: DocumentType
+  tags: DocumentType[]
+  /** Content heuristic flags from chunker (set on at least one chunk) */
+  hasEmailHeaders: boolean
+  hasFinancialAmounts: boolean
+  hasRedactionMarkers: boolean
+  hasDateReferences: boolean
+}
+
+// Type groups for routing logic
+const SWORN_TYPES = new Set<DocumentType>([
+  'deposition', 'grand_jury_testimony', 'witness_statement', 'plea_agreement',
+])
+const OFFICIAL_TYPES = new Set<DocumentType>([
+  'court_filing', 'indictment', 'subpoena', 'search_warrant',
+  'police_report', 'fbi_report', 'government_report',
+])
+const RECORD_TYPES = new Set<DocumentType>([
+  'flight_log', 'financial_record', 'tax_filing', 'trust_document',
+  'phone_record', 'medical_record', 'corporate_filing', 'property_record',
+])
+const CORRESPONDENCE_TYPES = new Set<DocumentType>([
+  'email', 'letter', 'memo', 'fax', 'correspondence',
+])
+const FINANCIAL_TYPES = new Set<DocumentType>([
+  'financial_record', 'tax_filing', 'trust_document', 'corporate_filing', 'receipt_invoice',
+])
+const FLIGHT_TYPES = new Set<DocumentType>([
+  'flight_log',
+])
+const STRUCTURED_TYPES = new Set<DocumentType>([
+  'flight_log', 'financial_record', 'phone_record', 'address_book',
+])
+const TIMELINE_RICH_TYPES = new Set<DocumentType>([
+  'deposition', 'grand_jury_testimony', 'witness_statement', 'plea_agreement',
+  'court_filing', 'indictment', 'fbi_report', 'government_report',
+  'flight_log', 'calendar_schedule',
+])
+
+function classificationHasAny(c: DocumentClassification, typeSet: Set<DocumentType>): boolean {
+  return typeSet.has(c.primary) || c.tags.some((t) => typeSet.has(t))
+}
+
 export interface StageDefinition {
   stage: PipelineStage
   label: string
@@ -33,6 +84,14 @@ export interface StageDefinition {
   idempotent: boolean
   /** Max retries before marking as failed */
   maxRetries: number
+  /** If true, runs for every document. If false, shouldRun() determines eligibility. */
+  alwaysRun: boolean
+  /**
+   * Returns true if this stage should run for the given document classification.
+   * Only called when alwaysRun is false.
+   * Uses both classification labels AND content heuristic flags for fallback routing.
+   */
+  shouldRun?: (classification: DocumentClassification) => boolean
 }
 
 export const STAGE_DEFINITIONS: StageDefinition[] = [
@@ -44,24 +103,27 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     estimatedCostPerPage: 0.0015,
     idempotent: true,
     maxRetries: 3,
+    alwaysRun: true,
   },
   {
     stage: PipelineStage.CLASSIFY,
     label: 'Classification',
-    description: 'Classify document into one of 16 types (deposition, flight log, etc.)',
+    description: 'Classify document into ~30 types with multi-label support (primary + tags)',
     dependsOn: [PipelineStage.OCR],
     estimatedCostPerPage: 0.0002,
     idempotent: true,
     maxRetries: 3,
+    alwaysRun: true,
   },
   {
     stage: PipelineStage.CHUNK,
     label: 'Chunking',
-    description: 'Split OCR text into 800-1500 char chunks respecting section boundaries',
+    description: 'Split OCR text into 800-1500 char chunks with content heuristic flags',
     dependsOn: [PipelineStage.OCR],
     estimatedCostPerPage: 0.0,
     idempotent: true,
     maxRetries: 1,
+    alwaysRun: true,
   },
   {
     stage: PipelineStage.CONTEXTUAL_HEADERS,
@@ -71,6 +133,7 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     estimatedCostPerPage: 0.0005,
     idempotent: true,
     maxRetries: 3,
+    alwaysRun: true,
   },
   {
     stage: PipelineStage.EMBED,
@@ -80,6 +143,7 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     estimatedCostPerPage: 0.0001,
     idempotent: true,
     maxRetries: 3,
+    alwaysRun: true,
   },
   {
     stage: PipelineStage.VISUAL_EMBED,
@@ -89,6 +153,8 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     estimatedCostPerPage: 0.0003,
     idempotent: true,
     maxRetries: 3,
+    alwaysRun: false,
+    shouldRun: (c) => c.primary === 'photograph' || c.tags.includes('photograph'),
   },
   {
     stage: PipelineStage.ENTITY_EXTRACT,
@@ -96,8 +162,9 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     description: 'Extract named entities (people, orgs, locations, etc.) from chunks',
     dependsOn: [PipelineStage.CHUNK],
     estimatedCostPerPage: 0.001,
-    idempotent: false, // creates entity_mentions — re-running may duplicate
+    idempotent: false,
     maxRetries: 3,
+    alwaysRun: true,
   },
   {
     stage: PipelineStage.RELATIONSHIP_MAP,
@@ -107,6 +174,13 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     estimatedCostPerPage: 0.0008,
     idempotent: false,
     maxRetries: 3,
+    alwaysRun: false,
+    // Run for substantive document types — skip for address book, photos, news clippings
+    shouldRun: (c) =>
+      classificationHasAny(c, SWORN_TYPES) ||
+      classificationHasAny(c, OFFICIAL_TYPES) ||
+      classificationHasAny(c, RECORD_TYPES) ||
+      classificationHasAny(c, CORRESPONDENCE_TYPES),
   },
   {
     stage: PipelineStage.REDACTION_DETECT,
@@ -116,6 +190,9 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     estimatedCostPerPage: 0.0005,
     idempotent: true,
     maxRetries: 3,
+    alwaysRun: false,
+    // Only run if content heuristic found redaction markers in any chunk
+    shouldRun: (c) => c.hasRedactionMarkers,
   },
   {
     stage: PipelineStage.TIMELINE_EXTRACT,
@@ -125,6 +202,10 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     estimatedCostPerPage: 0.0005,
     idempotent: false,
     maxRetries: 3,
+    alwaysRun: false,
+    // Run for timeline-rich doc types OR if content heuristic found dates
+    shouldRun: (c) =>
+      classificationHasAny(c, TIMELINE_RICH_TYPES) || c.hasDateReferences,
   },
   {
     stage: PipelineStage.SUMMARIZE,
@@ -134,6 +215,7 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     estimatedCostPerPage: 0.0003,
     idempotent: true,
     maxRetries: 3,
+    alwaysRun: true,
   },
   {
     stage: PipelineStage.CRIMINAL_INDICATORS,
@@ -143,15 +225,26 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     estimatedCostPerPage: 0.0008,
     idempotent: true,
     maxRetries: 3,
+    alwaysRun: false,
+    // Run for sworn testimony, official docs, and financial records — skip peripheral
+    shouldRun: (c) =>
+      classificationHasAny(c, SWORN_TYPES) ||
+      classificationHasAny(c, OFFICIAL_TYPES) ||
+      classificationHasAny(c, FINANCIAL_TYPES) ||
+      classificationHasAny(c, CORRESPONDENCE_TYPES),
   },
   {
     stage: PipelineStage.EMAIL_EXTRACT,
     label: 'Email Extraction',
-    description: 'Extract structured email data (from/to/cc, body, threads) from documents classified as correspondence',
+    description: 'Extract structured email data (from/to/cc, body, threads)',
     dependsOn: [PipelineStage.ENTITY_EXTRACT],
     estimatedCostPerPage: 0.0006,
     idempotent: true,
     maxRetries: 3,
+    alwaysRun: false,
+    // Run if classified as correspondence OR content heuristic found email headers
+    shouldRun: (c) =>
+      classificationHasAny(c, CORRESPONDENCE_TYPES) || c.hasEmailHeaders,
   },
   {
     stage: PipelineStage.FINANCIAL_EXTRACT,
@@ -161,6 +254,10 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     estimatedCostPerPage: 0.0006,
     idempotent: true,
     maxRetries: 3,
+    alwaysRun: false,
+    // Run if classified as financial OR content heuristic found dollar amounts
+    shouldRun: (c) =>
+      classificationHasAny(c, FINANCIAL_TYPES) || c.hasFinancialAmounts,
   },
   {
     stage: PipelineStage.CO_FLIGHT_LINKS,
@@ -170,6 +267,12 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     estimatedCostPerPage: 0.0,
     idempotent: true,
     maxRetries: 2,
+    alwaysRun: false,
+    // Only run if flight logs or correspondence were found
+    shouldRun: (c) =>
+      classificationHasAny(c, FLIGHT_TYPES) ||
+      classificationHasAny(c, CORRESPONDENCE_TYPES) ||
+      c.hasEmailHeaders,
   },
   {
     stage: PipelineStage.NETWORK_METRICS,
@@ -179,6 +282,7 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     estimatedCostPerPage: 0.0,
     idempotent: true,
     maxRetries: 2,
+    alwaysRun: true, // Network metrics are global — always recompute
   },
   {
     stage: PipelineStage.RISK_SCORE,
@@ -188,6 +292,7 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     estimatedCostPerPage: 0.0,
     idempotent: true,
     maxRetries: 2,
+    alwaysRun: true, // Risk scoring is global — always recompute
   },
 ]
 
