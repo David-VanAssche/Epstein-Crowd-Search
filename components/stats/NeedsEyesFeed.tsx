@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { fetchApi } from '@/lib/api/client'
 
 interface NeedsEyesDocument {
   id: string
@@ -25,18 +26,16 @@ export function NeedsEyesFeed() {
   const [datasetFilter, setDatasetFilter] = useState<string>('all')
   const [difficultyFilter, setDifficultyFilter] = useState<string>('all')
 
-  const { data } = useQuery<NeedsEyesDocument[]>({
+  const { data: documents = [] } = useQuery({
     queryKey: ['stats', 'needs-eyes', datasetFilter, difficultyFilter],
     queryFn: () => {
       const params = new URLSearchParams()
       if (datasetFilter !== 'all') params.set('dataset', datasetFilter)
       if (difficultyFilter !== 'all') params.set('difficulty', difficultyFilter)
-      return fetch(`/api/stats/needs-eyes?${params.toString()}`).then((r) => r.json())
+      return fetchApi<NeedsEyesDocument[]>(`/api/stats/needs-eyes?${params.toString()}`)
     },
-    enabled: false,
+    staleTime: 120_000,
   })
-
-  const documents = data ?? []
 
   const difficultyColor = (d: string) => {
     switch (d) {
@@ -61,10 +60,9 @@ export function NeedsEyesFeed() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Datasets</SelectItem>
-              <SelectItem value="sdny">SDNY Court Docs</SelectItem>
-              <SelectItem value="fbi">FBI Files</SelectItem>
-              <SelectItem value="financial">Financial Records</SelectItem>
-              <SelectItem value="flights">Flight Logs</SelectItem>
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
+                <SelectItem key={n} value={String(n)}>Dataset {n}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={difficultyFilter} onValueChange={setDifficultyFilter}>

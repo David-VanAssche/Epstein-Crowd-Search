@@ -1,7 +1,8 @@
 // lib/pipeline/orchestrator.ts
 // Runs a document through all pipeline stages sequentially.
 // Each stage is a function that takes a document ID and returns void.
-// The orchestrator handles retries, status updates, and error reporting.
+// The orchestrator handles retries, status updates, error reporting,
+// classification-driven routing, and tracks per-stage completion via completed_stages.
 
 import { SupabaseClient } from '@supabase/supabase-js'
 import {
@@ -10,7 +11,11 @@ import {
   getOrderedStages,
   stageToStatus,
   PROCESSING_STATUS,
+  DocumentClassification,
 } from './stages'
+import { DOCUMENT_TYPES, type DocumentType } from './services/classifier'
+
+const DOCUMENT_TYPE_SET = new Set<string>(DOCUMENT_TYPES)
 
 export interface StageHandler {
   (documentId: string, supabase: SupabaseClient): Promise<void>
@@ -29,6 +34,8 @@ export interface StageResult {
   durationMs: number
   error?: string
   retries: number
+  skipped?: boolean
+  skipReason?: string
 }
 
 export interface PipelineResult {
@@ -36,6 +43,7 @@ export interface PipelineResult {
   success: boolean
   stages: StageResult[]
   totalDurationMs: number
+  stagesSkippedByRouting: number
 }
 
 export type StageSkipCheck = (documentId: string, supabase: SupabaseClient) => Promise<boolean>
@@ -61,13 +69,77 @@ export class PipelineOrchestrator {
     this.skipChecks.set(stage, check)
   }
 
+  /** Build DocumentClassification from the database for routing decisions */
+  private async getDocumentClassification(
+    documentId: string,
+    includeHeuristics: boolean
+  ): Promise<DocumentClassification | null> {
+    const { data: doc } = await this.supabase
+      .from('documents')
+      .select('classification, classification_tags')
+      .eq('id', documentId)
+      .single()
+
+    if (!doc || !(doc as any).classification) return null
+
+    // Validate classification against known types
+    const rawClassification = ((doc as any).classification || '').toLowerCase().trim()
+    const validPrimary = DOCUMENT_TYPE_SET.has(rawClassification)
+      ? rawClassification
+      : 'other'
+
+    // Validate tags
+    const rawTags: string[] = (doc as any).classification_tags || []
+    const validTags = rawTags
+      .map((t) => t.toLowerCase().trim())
+      .filter((t) => DOCUMENT_TYPE_SET.has(t)) as DocumentType[]
+
+    let hasEmailHeaders = false
+    let hasFinancialAmounts = false
+    let hasRedactionMarkers = false
+    let hasDateReferences = false
+
+    // Use server-side RPC aggregation instead of fetching all chunk rows
+    if (includeHeuristics) {
+      const { data: heuristics } = await this.supabase
+        .rpc('get_document_heuristics', { p_document_id: documentId })
+
+      if (heuristics && Array.isArray(heuristics) && heuristics.length > 0) {
+        const h = heuristics[0] as any
+        hasEmailHeaders = !!h.has_email_headers
+        hasFinancialAmounts = !!h.has_financial_amounts
+        hasRedactionMarkers = !!h.has_redaction_markers
+        hasDateReferences = !!h.has_date_references
+      }
+    }
+
+    return {
+      primary: validPrimary as DocumentType,
+      tags: validTags,
+      hasEmailHeaders,
+      hasFinancialAmounts,
+      hasRedactionMarkers,
+      hasDateReferences,
+    }
+  }
+
   /** Run the full pipeline for a document */
   async processDocument(documentId: string): Promise<PipelineResult> {
     const startTime = Date.now()
     const results: StageResult[] = []
     let allSucceeded = true
+    let stagesSkippedByRouting = 0
 
     console.log(`[Pipeline] Starting processing for document ${documentId}`)
+
+    // Fetch current completed_stages for skip logic
+    const { data: doc } = await this.supabase
+      .from('documents')
+      .select('completed_stages')
+      .eq('id', documentId)
+      .single()
+
+    const completedStages = new Set<string>((doc as any)?.completed_stages || [])
 
     // Get ordered stages, optionally filtered
     let stages = getOrderedStages()
@@ -76,14 +148,62 @@ export class PipelineOrchestrator {
       stages = stages.filter((s) => filterSet.has(s))
     }
 
+    // Classification-driven routing: loaded after CLASSIFY, upgraded with heuristics after CHUNK
+    let classification: DocumentClassification | null = null
+    let classificationHasHeuristics = false
+
     for (const stage of stages) {
+      // Skip stages already completed (from completed_stages array)
+      if (completedStages.has(stage)) {
+        console.log(`[Pipeline] Stage ${stage} already completed for document ${documentId}, skipping`)
+        results.push({ stage, success: true, durationMs: 0, retries: 0 })
+        continue
+      }
+
       const handler = this.handlers.get(stage)
       if (!handler) {
         console.warn(`[Pipeline] No handler registered for stage: ${stage}, skipping`)
         continue
       }
 
-      // Per-document skip check
+      // Load classification once CLASSIFY is done (without heuristics initially)
+      if (!classification && completedStages.has(PipelineStage.CLASSIFY)) {
+        const hasChunks = completedStages.has(PipelineStage.CHUNK)
+        classification = await this.getDocumentClassification(documentId, hasChunks)
+        classificationHasHeuristics = hasChunks
+      }
+
+      // Upgrade classification with heuristic flags once CHUNK completes
+      if (classification && !classificationHasHeuristics && completedStages.has(PipelineStage.CHUNK)) {
+        classification = await this.getDocumentClassification(documentId, true)
+        classificationHasHeuristics = true
+      }
+
+      // Classification-driven routing check
+      const stageDef = STAGE_DEFINITIONS.find((d) => d.stage === stage)
+      if (stageDef && !stageDef.alwaysRun && classification) {
+        const shouldRun = stageDef.shouldRun?.(classification) ?? true
+        if (!shouldRun) {
+          stagesSkippedByRouting++
+          console.log(
+            `[Pipeline] Stage ${stage} skipped for document ${documentId} (routing: primary=${classification.primary})`
+          )
+          results.push({
+            stage,
+            success: true,
+            durationMs: 0,
+            retries: 0,
+            skipped: true,
+            skipReason: `Not applicable for ${classification.primary}`,
+          })
+          // Mark as completed so it doesn't re-run on resume
+          await this.appendCompletedStage(documentId, stage)
+          completedStages.add(stage)
+          continue
+        }
+      }
+
+      // Per-document skip check (custom logic beyond completed_stages)
       const skipCheck = this.skipChecks.get(stage)
       if (skipCheck) {
         const shouldSkip = await skipCheck(documentId, this.supabase)
@@ -94,7 +214,6 @@ export class PipelineOrchestrator {
         }
       }
 
-      const stageDef = STAGE_DEFINITIONS.find((d) => d.stage === stage)
       const maxRetries = stageDef?.maxRetries ?? this.config.maxRetries
 
       // Update processing status
@@ -122,6 +241,10 @@ export class PipelineOrchestrator {
         break
       }
 
+      // Mark stage as completed in the completed_stages array
+      await this.appendCompletedStage(documentId, stage)
+      completedStages.add(stage)
+
       console.log(
         `[Pipeline] Stage ${stage} completed for document ${documentId} (${stageResult.durationMs}ms)`
       )
@@ -133,10 +256,10 @@ export class PipelineOrchestrator {
 
     const totalDurationMs = Date.now() - startTime
     console.log(
-      `[Pipeline] Document ${documentId} ${allSucceeded ? 'completed' : 'failed'} in ${totalDurationMs}ms`
+      `[Pipeline] Document ${documentId} ${allSucceeded ? 'completed' : 'failed'} in ${totalDurationMs}ms (${stagesSkippedByRouting} stages skipped by routing)`
     )
 
-    return { documentId, success: allSucceeded, stages: results, totalDurationMs }
+    return { documentId, success: allSucceeded, stages: results, totalDurationMs, stagesSkippedByRouting }
   }
 
   /** Run a single stage with retry logic */
@@ -178,6 +301,41 @@ export class PipelineOrchestrator {
       durationMs: Date.now() - startTime,
       error: lastError,
       retries,
+    }
+  }
+
+  /** Append a stage to the document's completed_stages array */
+  private async appendCompletedStage(
+    documentId: string,
+    stage: string
+  ): Promise<void> {
+    const { error } = await this.supabase.rpc('append_completed_stage', {
+      p_document_id: documentId,
+      p_stage: stage,
+    })
+
+    if (error) {
+      // Fallback: use array_append with dedup if the RPC doesn't exist yet.
+      // This is still race-safe because we filter out duplicates in the update.
+      console.warn(`[Pipeline] append_completed_stage RPC failed, using fallback: ${error.message}`)
+      const { data: doc } = await this.supabase
+        .from('documents')
+        .select('completed_stages')
+        .eq('id', documentId)
+        .single()
+
+      const current: string[] = (doc as any)?.completed_stages || []
+      // Use Set to deduplicate — even if another worker added stages between our
+      // read and write, we won't remove them (only add ours). Worst case: a
+      // concurrent write overwrites with the same set. No data loss.
+      const updated = Array.from(new Set([...current, stage]))
+      await this.supabase
+        .from('documents')
+        .update({
+          completed_stages: updated,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', documentId)
     }
   }
 

@@ -3,27 +3,17 @@
 // Uses Gemini Flash to analyze chunks where multiple entities co-occur.
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { buildPromptContext, buildRelationshipMappingPrompt, PROMPT_VERSION, RELATIONSHIP_TYPES_BY_TIER } from '@/lib/pipeline/prompts'
+import type { PromptContext } from '@/lib/pipeline/prompts'
+import type { RelationshipType } from '@/types/entities'
 
-const RELATIONSHIP_TYPES = [
-  'traveled_with',
-  'employed_by',
-  'associate_of',
-  'family_member',
-  'legal_representative',
-  'financial_connection',
-  'communicated_with',
-  'met_with',
-  'referenced_together',
-  'victim_of',
-  'witness_against',
-] as const
-
-type RelationshipType = (typeof RELATIONSHIP_TYPES)[number]
+// Derive validation set from the prompt system's canonical list (DRY)
+const VALID_RELATIONSHIP_TYPES = new Set<string>(RELATIONSHIP_TYPES_BY_TIER.default.all)
 
 interface ExtractedRelationship {
   entityA: string
   entityB: string
-  type: RelationshipType
+  type: string
   description: string
   confidence: number
 }
@@ -31,9 +21,12 @@ interface ExtractedRelationship {
 async function extractRelationships(
   chunkContent: string,
   entityNames: string[],
+  ctx: PromptContext,
   apiKey: string
 ): Promise<ExtractedRelationship[]> {
   if (entityNames.length < 2) return []
+
+  const prompt = buildRelationshipMappingPrompt(ctx, entityNames, chunkContent)
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
@@ -41,36 +34,7 @@ async function extractRelationships(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: `Given this text and the entities mentioned in it, identify relationships between entity pairs.
-
-Entities present: ${entityNames.join(', ')}
-
-Relationship types: ${RELATIONSHIP_TYPES.join(', ')}
-
-Text:
----
-${chunkContent}
----
-
-For each relationship found, provide:
-- entityA: name of first entity
-- entityB: name of second entity
-- type: one of the relationship types above
-- description: 1 sentence describing the relationship evidence
-- confidence: 0.0-1.0
-
-Return JSON array:
-[{"entityA":"...","entityB":"...","type":"...","description":"...","confidence":0.8}]
-
-Return [] if no relationships found. Only include relationships clearly supported by the text.`,
-              },
-            ],
-          },
-        ],
+        contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.1,
           maxOutputTokens: 2048,
@@ -87,7 +51,8 @@ Return [] if no relationships found. Only include relationships clearly supporte
 
   try {
     const parsed = JSON.parse(text) as ExtractedRelationship[]
-    return parsed.filter((r) => RELATIONSHIP_TYPES.includes(r.type as RelationshipType))
+    // Validate against canonical type set
+    return parsed.filter((r) => VALID_RELATIONSHIP_TYPES.has(r.type))
   } catch {
     return []
   }
@@ -101,8 +66,31 @@ export async function handleRelationshipMap(
 ): Promise<void> {
   console.log(`[RelMap] Processing document ${documentId}`)
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY
-  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY not set')
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
+
+  // Get document classification for prompt routing
+  const { data: doc } = await supabase
+    .from('documents')
+    .select('classification, classification_confidence, classification_tags, filename')
+    .eq('id', documentId)
+    .single()
+
+  let ctx: PromptContext
+  try {
+    ctx = buildPromptContext(
+      (doc as any)?.classification || 'other',
+      ((doc as any)?.classification_tags as string[]) || [],
+      {
+        documentId,
+        filename: (doc as any)?.filename || '',
+        primaryConfidence: (doc as any)?.classification_confidence ?? 0,
+      }
+    )
+  } catch {
+    console.warn(`[RelMap] PromptContext build failed for ${documentId}, using default tier`)
+    ctx = buildPromptContext('other', [], { documentId, filename: '', primaryConfidence: 0 })
+  }
 
   // Get all chunks with their entity mentions
   const { data: chunks, error } = await supabase
@@ -138,6 +126,7 @@ export async function handleRelationshipMap(
       const relationships = await extractRelationships(
         (chunk as any).content,
         entityNames,
+        ctx,
         apiKey
       )
 
@@ -149,22 +138,39 @@ export async function handleRelationshipMap(
         // Sort IDs to avoid duplicate A-B / B-A entries
         const [id1, id2] = [entityAId, entityBId].sort()
 
-        const { error: insertError } = await supabase
+        // Check for existing relationship to merge evidence arrays
+        const { data: existing } = await supabase
           .from('entity_relationships')
-          .upsert(
-            {
+          .select('id, evidence_chunk_ids, evidence_document_ids, strength')
+          .eq('entity_a_id', id1)
+          .eq('entity_b_id', id2)
+          .eq('relationship_type', rel.type)
+          .maybeSingle()
+
+        if (existing) {
+          // Merge evidence arrays (deduplicate)
+          const chunkIds = Array.from(new Set([...((existing as any).evidence_chunk_ids || []), (chunk as any).id]))
+          const docIds = Array.from(new Set([...((existing as any).evidence_document_ids || []), documentId]))
+          const strength = Math.max((existing as any).strength || 0, rel.confidence)
+          await supabase
+            .from('entity_relationships')
+            .update({ evidence_chunk_ids: chunkIds, evidence_document_ids: docIds, strength })
+            .eq('id', (existing as any).id)
+          totalRelationships++
+        } else {
+          const { error: insertError } = await supabase
+            .from('entity_relationships')
+            .insert({
               entity_a_id: id1,
               entity_b_id: id2,
-              relationship_type: rel.type,
+              relationship_type: rel.type as RelationshipType,
               description: rel.description,
               evidence_chunk_ids: [(chunk as any).id],
               evidence_document_ids: [documentId],
               strength: rel.confidence,
-            },
-            { onConflict: 'entity_a_id,entity_b_id,relationship_type' }
-          )
-
-        if (!insertError) totalRelationships++
+            })
+          if (!insertError) totalRelationships++
+        }
       }
 
       await new Promise((r) => setTimeout(r, 300))

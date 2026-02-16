@@ -1,8 +1,13 @@
 // lib/pipeline/services/video-transcriber.ts
 // Transcribe video files and create video_chunks records.
 // Uses Whisper via OpenAI API for transcription.
+// Includes ffprobe-based prescreening to skip silent/surveillance footage.
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { writeFile, unlink } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { prescreenMedia, type MediaScreenResult } from './audio-processor'
 
 export async function handleVideoTranscribe(
   videoId: string,
@@ -30,6 +35,34 @@ export async function handleVideoTranscribe(
   if (dlError || !fileData) throw new Error(`Failed to download: ${dlError?.message}`)
 
   const videoBuffer = Buffer.from(await fileData.arrayBuffer())
+
+  // Pre-screen media to skip silent/surveillance footage
+  const tempPath = join(tmpdir(), `prescreen-video-${videoId}`)
+  let screenResult: MediaScreenResult | null = null
+  try {
+    await writeFile(tempPath, videoBuffer)
+    screenResult = await prescreenMedia(tempPath)
+  } catch {
+    // Prescreening is best-effort
+  } finally {
+    try { await unlink(tempPath) } catch { /* ignore */ }
+  }
+
+  if (screenResult && (screenResult.category === 'NO_AUDIO' || screenResult.category === 'SURVEILLANCE')) {
+    console.log(`[Video] Video ${videoId}: skipped transcription — ${screenResult.reason}`)
+    await supabase
+      .from('videos')
+      .update({
+        processing_status: 'complete',
+        metadata: {
+          media_prescreen: screenResult,
+          transcription_skipped: true,
+          transcription_skip_reason: screenResult.reason,
+        },
+      })
+      .eq('id', videoId)
+    return
+  }
 
   // Transcribe using Whisper
   const formData = new FormData()

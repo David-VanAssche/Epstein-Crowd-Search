@@ -3,6 +3,8 @@
 // Runs after entity extraction for maximum context.
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { buildPromptContext, buildDocumentSummaryPrompt } from '@/lib/pipeline/prompts'
+import type { PromptContext } from '@/lib/pipeline/prompts'
 
 interface DocumentSummary {
   summary: string
@@ -14,7 +16,7 @@ interface DocumentSummary {
 
 async function generateSummary(
   ocrText: string,
-  classification: string,
+  ctx: PromptContext,
   entityNames: string[],
   apiKey: string
 ): Promise<DocumentSummary> {
@@ -24,39 +26,15 @@ async function generateSummary(
       ? ocrText.slice(0, 8000) + '\n...\n' + ocrText.slice(-2000)
       : ocrText
 
+  const prompt = buildDocumentSummaryPrompt(ctx, entityNames, textSample)
+
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: `Generate an executive summary of this ${classification} document.
-
-Known entities in this document: ${entityNames.slice(0, 20).join(', ')}
-
-Document text:
----
-${textSample}
----
-
-Provide JSON:
-{
-  "summary": "<3-5 sentence executive summary of what this document is and its key content>",
-  "keyPeople": ["<names of most important people mentioned>"],
-  "timePeriod": "<date range covered, e.g. 'March-July 2003' or null>",
-  "significance": "<1 sentence on why this document matters for the investigation>",
-  "potentialCriminalIndicators": ["<brief descriptions of any content suggesting trafficking, obstruction, conspiracy, or financial crimes>"]
-}
-
-Be factual. For potentialCriminalIndicators, flag patterns — never make accusations.`,
-              },
-            ],
-          },
-        ],
+        contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.2,
           maxOutputTokens: 1024,
@@ -94,17 +72,33 @@ export async function handleSummarize(
 ): Promise<void> {
   console.log(`[Summarize] Processing document ${documentId}`)
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY
-  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY not set')
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
 
   const { data: doc, error } = await supabase
     .from('documents')
-    .select('id, ocr_text, classification, metadata')
+    .select('id, ocr_text, classification, classification_confidence, classification_tags, filename, metadata')
     .eq('id', documentId)
     .single()
 
   if (error || !doc) throw new Error(`Document not found: ${documentId}`)
   if (!(doc as any).ocr_text) throw new Error(`Document ${documentId} has no OCR text`)
+
+  let ctx: PromptContext
+  try {
+    ctx = buildPromptContext(
+      (doc as any).classification || 'other',
+      ((doc as any).classification_tags as string[]) || [],
+      {
+        documentId,
+        filename: (doc as any).filename || '',
+        primaryConfidence: (doc as any).classification_confidence ?? 0,
+      }
+    )
+  } catch {
+    console.warn(`[Summarize] PromptContext build failed for ${documentId}, using default tier`)
+    ctx = buildPromptContext('other', [], { documentId, filename: '', primaryConfidence: 0 })
+  }
 
   // Get entity names mentioned in this document
   const { data: mentions } = await supabase
@@ -118,7 +112,7 @@ export async function handleSummarize(
 
   const summary = await generateSummary(
     (doc as any).ocr_text,
-    (doc as any).classification || 'unknown',
+    ctx,
     entityNames,
     apiKey
   )

@@ -2,7 +2,25 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { fetchApi } from '@/lib/api/client'
+
+interface StatsApiResponse {
+  total_documents: number
+  total_pages: number | null
+  total_chunks: number
+  total_images: number
+  total_videos: number
+  total_entities: number
+  total_relationships: number
+  total_redactions: number
+  total_flights?: number
+  entities_by_type?: Record<string, number>
+  redactions_by_status?: { solved: number; proposed: number; unsolved: number }
+  total_contributors?: number
+  total_proposals?: number
+}
 
 interface CorpusStatsData {
   total_documents: number
@@ -11,22 +29,7 @@ interface CorpusStatsData {
   total_images: number
   total_videos: number
   total_entities: number
-  entities_by_type: {
-    person: number
-    organization: number
-    location: number
-    aircraft: number
-    vessel: number
-    property: number
-    account: number
-    event: number
-    legal_case: number
-    government_body: number
-    trust: number
-    phone_number: number
-    vehicle: number
-    document_reference: number
-  }
+  entities_by_type: Record<string, number>
   total_relationships: number
   total_redactions: number
   redactions_by_status: {
@@ -36,11 +39,7 @@ interface CorpusStatsData {
   }
   total_contributors: number
   total_proposals: number
-  accuracy_rate: number
-}
-
-interface CorpusStatsProps {
-  stats?: CorpusStatsData
+  total_flights: number
 }
 
 function AnimatedNumber({ value }: { value: number }) {
@@ -83,31 +82,36 @@ const STAT_CARDS = [
   { key: 'total_videos', label: 'Videos' },
   { key: 'total_entities', label: 'Entities' },
   { key: 'total_relationships', label: 'Relationships' },
+  { key: 'total_flights', label: 'Flights' },
   { key: 'total_redactions', label: 'Redactions' },
 ] as const
 
-export function CorpusStats({ stats }: CorpusStatsProps) {
-  const defaultStats: CorpusStatsData = {
-    total_documents: 0,
-    total_pages: 0,
-    total_chunks: 0,
-    total_images: 0,
-    total_videos: 0,
-    total_entities: 0,
-    entities_by_type: { person: 0, organization: 0, location: 0, aircraft: 0, vessel: 0, property: 0, account: 0, event: 0, legal_case: 0, government_body: 0, trust: 0, phone_number: 0, vehicle: 0, document_reference: 0 },
-    total_relationships: 0,
-    total_redactions: 0,
-    redactions_by_status: { solved: 0, proposed: 0, unsolved: 0 },
-    total_contributors: 0,
-    total_proposals: 0,
-    accuracy_rate: 0,
-  }
+export function CorpusStats() {
+  const { data: apiStats } = useQuery({
+    queryKey: ['stats'],
+    queryFn: () => fetchApi<StatsApiResponse>('/api/stats'),
+    staleTime: 60_000,
+  })
 
-  const s = stats ?? defaultStats
+  const s: CorpusStatsData = {
+    total_documents: apiStats?.total_documents ?? 0,
+    total_pages: apiStats?.total_pages ?? 0,
+    total_chunks: apiStats?.total_chunks ?? 0,
+    total_images: apiStats?.total_images ?? 0,
+    total_videos: apiStats?.total_videos ?? 0,
+    total_entities: apiStats?.total_entities ?? 0,
+    entities_by_type: apiStats?.entities_by_type ?? {},
+    total_relationships: apiStats?.total_relationships ?? 0,
+    total_redactions: apiStats?.total_redactions ?? 0,
+    redactions_by_status: apiStats?.redactions_by_status ?? { solved: 0, proposed: 0, unsolved: 0 },
+    total_contributors: apiStats?.total_contributors ?? 0,
+    total_proposals: apiStats?.total_proposals ?? 0,
+    total_flights: apiStats?.total_flights ?? 0,
+  }
 
   return (
     <div className="space-y-8">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {STAT_CARDS.map(({ key, label }) => (
           <Card key={key} className="border-border bg-surface">
             <CardContent className="pt-6 text-center">
@@ -120,21 +124,25 @@ export function CorpusStats({ stats }: CorpusStatsProps) {
         ))}
       </div>
 
-      <Card className="border-border bg-surface">
-        <CardHeader>
-          <CardTitle className="text-lg">Entities by Type</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {Object.entries(s.entities_by_type).map(([type, count]) => (
-              <div key={type} className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
-                <span className="text-sm capitalize">{type}</span>
-                <span className="text-sm font-bold">{count.toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {Object.keys(s.entities_by_type).length > 0 && (
+        <Card className="border-border bg-surface">
+          <CardHeader>
+            <CardTitle className="text-lg">Entities by Type</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {Object.entries(s.entities_by_type)
+                .sort(([, a], [, b]) => b - a)
+                .map(([type, count]) => (
+                  <div key={type} className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
+                    <span className="text-sm capitalize">{type.replace(/_/g, ' ')}</span>
+                    <span className="text-sm font-bold">{count.toLocaleString()}</span>
+                  </div>
+                ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-border bg-surface">
         <CardHeader>
@@ -169,7 +177,7 @@ export function CorpusStats({ stats }: CorpusStatsProps) {
           <CardTitle className="text-lg">Community Contributors</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="text-center">
               <div className="text-2xl font-bold text-primary">
                 <AnimatedNumber value={s.total_contributors} />
@@ -181,12 +189,6 @@ export function CorpusStats({ stats }: CorpusStatsProps) {
                 <AnimatedNumber value={s.total_proposals} />
               </div>
               <p className="text-sm text-muted-foreground">Proposals Submitted</p>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-primary">
-                {s.accuracy_rate}%
-              </div>
-              <p className="text-sm text-muted-foreground">Accuracy Rate</p>
             </div>
           </div>
         </CardContent>

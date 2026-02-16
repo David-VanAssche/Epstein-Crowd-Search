@@ -3,11 +3,12 @@
 
 import dynamic from 'next/dynamic'
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { LoadingState } from '@/components/shared/LoadingState'
-import { ProcessingFundingCard } from '@/components/funding/ProcessingFundingCard'
 import { MapControls } from '@/components/map/MapControls'
 import { MapSidebar } from '@/components/map/MapSidebar'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { fetchApi } from '@/lib/api/client'
 import type { MapLocation, MapFilters } from '@/types/map'
 
 const EvidenceMap = dynamic(
@@ -19,7 +20,11 @@ const EvidenceMap = dynamic(
 )
 
 export default function MapPage() {
-  const [locations] = useState<MapLocation[]>([])
+  const { data: locations = [], isLoading } = useQuery({
+    queryKey: ['map', 'locations'],
+    queryFn: () => fetchApi<MapLocation[]>('/api/map/locations'),
+    staleTime: 300_000,
+  })
   const [selectedLocation, setSelectedLocation] = useState<MapLocation | null>(null)
   const [filters, setFilters] = useState<MapFilters>({
     locationTypes: ['property', 'city', 'country', 'venue'],
@@ -32,10 +37,21 @@ export default function MapPage() {
     viewMode: 'pins',
   })
 
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[calc(100vh-var(--topbar-height))] items-center justify-center px-4">
+        <LoadingState variant="page" />
+      </div>
+    )
+  }
+
   if (locations.length === 0) {
     return (
       <div className="flex min-h-[calc(100vh-var(--topbar-height))] items-center justify-center px-4">
-        <ProcessingFundingCard slug="map" className="max-w-lg" />
+        <div className="text-center text-muted-foreground">
+          <p className="text-lg font-medium">No location data available yet</p>
+          <p className="text-sm">Flight and property locations will appear once data is imported.</p>
+        </div>
       </div>
     )
   }

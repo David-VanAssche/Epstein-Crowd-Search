@@ -20,7 +20,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Fetch entity with basic data (exclude name_embedding to avoid sending 1024d vector)
     const { data: entity, error } = await supabase
       .from('entities')
-      .select('id, name, entity_type, aliases, description, first_seen_date, last_seen_date, mention_count, document_count, metadata, source, is_verified, created_at, updated_at, category, wikidata_id, photo_url, birth_date, death_date, nationality, occupation')
+      .select('id, name, entity_type, aliases, description, first_seen_date, last_seen_date, mention_count, document_count, metadata, source, is_verified, created_at, updated_at, category, wikidata_id, photo_url, birth_date, death_date, nationality, occupation, risk_score, risk_factors, risk_score_updated_at')
       .eq('id', id)
       .single()
 
@@ -29,12 +29,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     // Fetch mention stats per document
-    const { data: mentionStats } = await supabase.rpc('get_entity_mention_stats', {
+    const { data: mentionStats, error: statsError } = await supabase.rpc('get_entity_mention_stats', {
       target_entity_id: id,
     })
+    if (statsError) {
+      console.warn(`[Entity] Mention stats failed for ${id}: ${statsError.message}`)
+    }
 
     // Fetch top related entities (via relationships)
-    const { data: relationships } = await supabase
+    const { data: relationships, error: relError } = await supabase
       .from('entity_relationships')
       .select(
         `
@@ -49,6 +52,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .or(`entity_a_id.eq.${id},entity_b_id.eq.${id}`)
       .order('strength', { ascending: false })
       .limit(10)
+
+    if (relError) {
+      console.warn(`[Entity] Relationships query failed for ${id}: ${relError.message}`)
+    }
 
     // For each relationship, fetch the related entity name
     const relatedEntityIds = (relationships || []).map((r: any) =>
@@ -65,10 +72,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       relatedEntities = entities || []
     }
 
-    // Combine relationship data with entity names
+    // Combine relationship data with entity names (use Map for O(1) lookup)
+    const relatedMap = new Map(relatedEntities.map((e: any) => [e.id, e]))
     const relatedWithNames = (relationships || []).map((r: any) => {
       const relatedId = r.entity_a_id === id ? r.entity_b_id : r.entity_a_id
-      const related = relatedEntities.find((e: any) => e.id === relatedId)
+      const related = relatedMap.get(relatedId)
       return {
         relationship_id: r.id,
         relationship_type: r.relationship_type,

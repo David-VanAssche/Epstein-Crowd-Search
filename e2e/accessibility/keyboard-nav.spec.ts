@@ -8,7 +8,7 @@ test.describe('Keyboard Navigation', () => {
 
   test('page has nav landmark', async ({ page }) => {
     await page.goto('/')
-    // Nav may be hidden on mobile, check it exists in DOM
+    // Nav may be the breadcrumb nav or sidebar content — check DOM
     const navCount = await page.locator('nav, [role="navigation"]').count()
     expect(navCount).toBeGreaterThan(0)
   })
@@ -35,18 +35,22 @@ test.describe('Keyboard Navigation', () => {
     }
   })
 
-  test('skip to content link or heading reachable', async ({ page }) => {
+  test('interactive content reachable via keyboard', async ({ page }) => {
     await page.goto('/')
-    const skip = page.locator('a[href="#main"], a:has-text("skip to content")')
-    if (await skip.count() === 0) {
-      const h1 = page.locator('h1').first()
-      await expect(h1).toBeVisible()
+    // The homepage has a search form — verify it can receive focus
+    const searchForm = page.locator('form[role="search"]')
+    await expect(searchForm).toBeAttached()
+    // Tab through elements and check we can reach a focusable element
+    for (let i = 0; i < 10; i++) {
+      await page.keyboard.press('Tab')
     }
+    const tag = await page.evaluate(() => document.activeElement?.tagName)
+    expect(['INPUT', 'BUTTON', 'A', 'TEXTAREA']).toContain(tag)
   })
 
   test('search input focusable via tab', async ({ page }) => {
     await page.goto('/')
-    const input = page.locator('input[type="search"], input[placeholder*="search" i]').first()
+    const input = page.locator('input[aria-label="Search documents"]')
     if (await input.count() > 0) {
       await input.focus()
       const tag = await page.evaluate(() => document.activeElement?.tagName)
@@ -54,13 +58,12 @@ test.describe('Keyboard Navigation', () => {
     }
   })
 
-  test('escape closes mobile menu', async ({ page }) => {
+  test('escape closes mobile sidebar', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 })
     await page.goto('/')
-    // Target the mobile hamburger (lg:hidden button with sr-only text)
-    const hamburger = page.locator('button:has(> .sr-only)').first()
-    if (await hamburger.count() > 0 && await hamburger.isVisible()) {
-      await hamburger.click()
+    const trigger = page.locator('[data-sidebar="trigger"]')
+    if (await trigger.count() > 0 && await trigger.isVisible()) {
+      await trigger.click()
       await page.waitForTimeout(500)
       await page.keyboard.press('Escape')
       await page.waitForTimeout(300)

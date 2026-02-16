@@ -45,6 +45,17 @@ export type RelationshipType =
   | 'introduced_by'
   | 'recruited_by'
   | 'located_at'
+  | 'communicated_with'
+  | 'met_with'
+
+export interface RiskFactors {
+  evidence_score: number
+  relationship_score: number
+  indicator_score: number
+  top_documents: Array<{ id: string; filename: string; weight: number }>
+  contributing_relationships: Array<{ type: string; entity_name: string; weight: number }>
+  indicator_categories: Record<string, number>
+}
 
 export interface Entity {
   id: string
@@ -68,6 +79,10 @@ export interface Entity {
   death_date: string | null
   nationality: string[]
   occupation: string[]
+  // Risk scoring (Phase 27)
+  risk_score: number
+  risk_factors: RiskFactors
+  risk_score_updated_at: string | null
 }
 
 export interface EntityMention {
@@ -81,6 +96,7 @@ export interface EntityMention {
   mention_type: MentionType
   confidence: number
   page_number: number | null
+  evidence_weight: number | null
   created_at: string
 }
 

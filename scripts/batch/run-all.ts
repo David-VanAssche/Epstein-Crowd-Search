@@ -23,6 +23,8 @@ import { handleSummarize } from '../../lib/pipeline/services/document-summarizer
 import { handleCriminalIndicators } from '../../lib/pipeline/services/criminal-indicator-scorer'
 import { handleEmailExtract } from '../../lib/pipeline/services/email-extractor'
 import { handleFinancialExtract } from '../../lib/pipeline/services/financial-extractor'
+import { handleCongressionalScore } from '../../lib/pipeline/services/congressional-scorer'
+import { handleSubpoenaExtract } from '../../lib/pipeline/services/subpoena-extractor'
 
 // --- Parse CLI args ---
 const args = process.argv.slice(2)
@@ -79,6 +81,8 @@ async function main() {
   pipeline.registerStage(PipelineStage.CRIMINAL_INDICATORS, handleCriminalIndicators)
   pipeline.registerStage(PipelineStage.EMAIL_EXTRACT, async (docId, sb) => { await handleEmailExtract(docId, sb) })
   pipeline.registerStage(PipelineStage.FINANCIAL_EXTRACT, async (docId, sb) => { await handleFinancialExtract(docId, sb) })
+  pipeline.registerStage(PipelineStage.CONGRESSIONAL_SCORE, handleCongressionalScore)
+  pipeline.registerStage(PipelineStage.SUBPOENA_EXTRACT, handleSubpoenaExtract)
 
   // --- Skip check registrations ---
   pipeline.registerSkipCheck(PipelineStage.OCR, async (docId, sb) => {

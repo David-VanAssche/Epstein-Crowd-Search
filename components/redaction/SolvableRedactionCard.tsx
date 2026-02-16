@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ProposalForm } from './ProposalForm'
+import { ProposalVoting } from './ProposalVoting'
 import type { SolvableRedaction } from '@/types/redaction'
 
 interface SolvableRedactionCardProps {
@@ -69,6 +70,10 @@ export function SolvableRedactionCard({ redaction }: SolvableRedactionCardProps)
             {showPropose ? 'Cancel' : 'Propose Solution'}
           </Button>
         </div>
+
+        {redaction.proposal_count > 0 && (
+          <ProposalVoting redactionId={redaction.redaction_id} />
+        )}
 
         {showPropose && (
           <ProposalForm

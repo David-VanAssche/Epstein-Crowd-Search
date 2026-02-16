@@ -8,7 +8,7 @@ export async function GET() {
 
     const { data: sources, error } = await supabase
       .from('data_sources')
-      .select('id, name, source_type, url, data_type, status, expected_count, ingested_count, failed_count, error_message, priority, ingested_at')
+      .select('id, name, source_type, url, description, data_type, status, expected_count, ingested_count, failed_count, error_message, priority, ingested_at')
       .order('priority', { ascending: false })
       .order('name', { ascending: true })
 

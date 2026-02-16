@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from('entities')
-      .select('id, name, entity_type, mention_count, document_count', { count: 'exact' })
+      .select('id, name, entity_type, mention_count, document_count, risk_score', { count: 'exact' })
       .order('mention_count', { ascending: false })
       .range(offset, offset + input.per_page - 1)
 
