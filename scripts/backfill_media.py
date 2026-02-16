@@ -6,7 +6,7 @@ sys.stderr.reconfigure(line_buffering=True)
 
 """
 backfill_media.py — Scan Supabase Storage (via S3 API) for media files in DOJ
-datasets and insert rows into the `images` and `videos` database tables.
+datasets and insert rows into the `images`, `videos`, and `audio_files` tables.
 
 Usage:
   # First time: install deps
@@ -26,6 +26,12 @@ Usage:
 
   # Skip S3 scan and use a pre-generated listing file:
   python scripts/backfill_media.py --listing-file /tmp/ds10_listing.txt --datasets 10
+
+  # Scan an arbitrary S3 prefix (non-DOJ sources):
+  python scripts/backfill_media.py --prefix house-oversight/release3/ --no-dataset-id
+
+  # With a custom source label:
+  python scripts/backfill_media.py --prefix kaggle/jazivxt/ --no-dataset-id --source-label kaggle-jazivxt
 """
 
 import argparse
@@ -36,6 +42,7 @@ import ssl
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -130,7 +137,9 @@ def supabase_rest(
     """Make a Supabase REST API request using urllib (no requests dependency)."""
     url = f"{SUPABASE_URL}/rest/v1/{table}"
     if params:
-        query = "&".join(f"{k}={v}" for k, v in params.items())
+        query = "&".join(
+            f"{k}={urllib.parse.quote(str(v), safe='.,=()!')}" for k, v in params.items()
+        )
         url += f"?{query}"
 
     headers = {
@@ -197,7 +206,7 @@ def get_existing_count(table: str, dataset_id: str) -> int:
 def batch_insert(
     table: str, rows: list[dict], dry_run: bool = False
 ) -> tuple[int, int]:
-    """Insert rows in batches. Returns (inserted, failed)."""
+    """Upsert rows in batches (on storage_path). Returns (upserted, failed)."""
     inserted = 0
     failed = 0
     total = len(rows)
@@ -212,10 +221,14 @@ def batch_insert(
                 print(f"    {table}: {inserted:,}/{total:,} [DRY RUN]")
             continue
 
-        # Retry with backoff
+        # Retry with backoff (upsert on storage_path for idempotency)
         success = False
         for attempt in range(3):
-            result = supabase_rest("POST", table, data=batch)
+            result = supabase_rest(
+                "POST", table, data=batch,
+                params={"on_conflict": "storage_path"},
+                prefer="resolution=merge-duplicates,return=minimal",
+            )
             status = result.get("status", 0)
             if 200 <= status < 300:
                 inserted += len(batch)
@@ -234,9 +247,13 @@ def batch_insert(
             print(
                 f"    Batch {i // BATCH_SIZE + 1} failed (HTTP {result.get('status', '?')}): {error[:300]}"
             )
-            # Fall back to individual inserts
+            # Fall back to individual upserts
             for row in batch:
-                r = supabase_rest("POST", table, data=row)
+                r = supabase_rest(
+                    "POST", table, data=row,
+                    params={"on_conflict": "storage_path"},
+                    prefer="resolution=merge-duplicates,return=minimal",
+                )
                 if 200 <= r.get("status", 0) < 300:
                     inserted += 1
                 else:
@@ -244,7 +261,7 @@ def batch_insert(
 
         done = i + len(batch)
         if done % 5000 < BATCH_SIZE or done >= total:
-            print(f"    {table}: {inserted:,}/{total:,} inserted, {failed:,} failed")
+            print(f"    {table}: {inserted:,}/{total:,} upserted, {failed:,} failed")
 
     return inserted, failed
 
@@ -380,9 +397,11 @@ def process_dataset(
     dataset_number: int,
     files: list[dict],
     dry_run: bool = False,
+    use_audio_table: bool = False,
+    source_label: str | None = None,
 ) -> dict:
     """
-    Process a list of files from a dataset, inserting image and video rows.
+    Process a list of files from a dataset, inserting image, video, and audio rows.
     Returns stats dict.
     """
     stats = {
@@ -393,8 +412,10 @@ def process_dataset(
         "audio_found": 0,
         "images_inserted": 0,
         "videos_inserted": 0,
+        "audio_inserted": 0,
         "images_failed": 0,
         "videos_failed": 0,
+        "audio_failed": 0,
         "skipped_existing": False,
     }
 
@@ -417,9 +438,56 @@ def process_dataset(
         stats["skipped_existing"] = True
         return stats
 
-    # Classify files and build insert rows
+    return _process_files(
+        files, dataset_id, dataset_number, stats, dry_run, use_audio_table, source_label
+    )
+
+
+def process_prefix(
+    prefix: str,
+    files: list[dict],
+    dry_run: bool = False,
+    source_label: str | None = None,
+) -> dict:
+    """
+    Process files from an arbitrary S3 prefix (no dataset_id).
+    Inserts into images, videos, audio_files.
+    """
+    stats = {
+        "prefix": prefix,
+        "total_files": len(files),
+        "images_found": 0,
+        "videos_found": 0,
+        "audio_found": 0,
+        "images_inserted": 0,
+        "videos_inserted": 0,
+        "audio_inserted": 0,
+        "images_failed": 0,
+        "videos_failed": 0,
+        "audio_failed": 0,
+        "skipped_existing": False,
+    }
+
+    return _process_files(
+        files, None, 0, stats, dry_run, use_audio_table=True, source_label=source_label
+    )
+
+
+def _process_files(
+    files: list[dict],
+    dataset_id: str | None,
+    dataset_number: int,
+    stats: dict,
+    dry_run: bool,
+    use_audio_table: bool = False,
+    source_label: str | None = None,
+) -> dict:
+    """Shared logic for processing files into images/videos/audio_files tables."""
     image_rows = []
-    video_rows = []  # includes audio — stored in videos table with media_type
+    video_rows = []
+    audio_rows = []  # only used when use_audio_table=True
+
+    meta_source = source_label or "backfill_media.py"
 
     for f in files:
         path = f["path"]
@@ -431,61 +499,70 @@ def process_dataset(
 
         filename = os.path.basename(path)
         ext = os.path.splitext(filename)[1].lower()
-        # path from S3 is already the full bucket-relative storage path
         storage_path = path
 
         if file_type == "image":
             stats["images_found"] += 1
-            image_rows.append(
-                {
-                    "dataset_id": dataset_id,
+            row = {
+                "filename": filename,
+                "storage_path": storage_path,
+                "file_type": ext.lstrip("."),
+                "file_size_bytes": size,
+                "metadata": json.dumps({"source": meta_source}),
+            }
+            if dataset_id:
+                row["dataset_id"] = dataset_id
+            image_rows.append(row)
+        elif file_type == "video":
+            stats["videos_found"] += 1
+            row = {
+                "filename": filename,
+                "storage_path": storage_path,
+                "media_type": determine_media_type(ext, dataset_number),
+                "processing_status": "pending",
+                "metadata": json.dumps(
+                    {
+                        "source": meta_source,
+                        "file_size_bytes": size,
+                        "file_type": ext.lstrip("."),
+                    }
+                ),
+            }
+            if dataset_id:
+                row["dataset_id"] = dataset_id
+            video_rows.append(row)
+        elif file_type == "audio":
+            stats["audio_found"] += 1
+            if use_audio_table:
+                row = {
                     "filename": filename,
                     "storage_path": storage_path,
                     "file_type": ext.lstrip("."),
                     "file_size_bytes": size,
-                    "metadata": json.dumps(
-                        {
-                            "source": "backfill_media.py",
-                        }
-                    ),
-                }
-            )
-        elif file_type == "video":
-            stats["videos_found"] += 1
-            video_rows.append(
-                {
-                    "dataset_id": dataset_id,
-                    "filename": filename,
-                    "storage_path": storage_path,
-                    "media_type": determine_media_type(ext, dataset_number),
                     "processing_status": "pending",
-                    "metadata": json.dumps(
-                        {
-                            "source": "backfill_media.py",
-                            "file_size_bytes": size,
-                            "file_type": ext.lstrip("."),
-                        }
-                    ),
+                    "metadata": json.dumps({"source": meta_source}),
                 }
-            )
-        elif file_type == "audio":
-            stats["audio_found"] += 1
-            video_rows.append(
-                {
-                    "dataset_id": dataset_id,
+                if dataset_id:
+                    row["dataset_id"] = dataset_id
+                audio_rows.append(row)
+            else:
+                # Legacy behavior: audio goes into videos table
+                row = {
                     "filename": filename,
                     "storage_path": storage_path,
                     "media_type": "audio",
                     "processing_status": "pending",
                     "metadata": json.dumps(
                         {
-                            "source": "backfill_media.py",
+                            "source": meta_source,
                             "file_size_bytes": size,
                             "file_type": ext.lstrip("."),
                         }
                     ),
                 }
-            )
+                if dataset_id:
+                    row["dataset_id"] = dataset_id
+                video_rows.append(row)
 
     print(
         f"  Found: {stats['images_found']:,} images, "
@@ -499,12 +576,20 @@ def process_dataset(
         stats["images_inserted"] = ins
         stats["images_failed"] = fail
 
-    # Insert videos (includes audio)
+    # Insert videos
     if video_rows:
-        print(f"  Inserting {len(video_rows):,} video/audio rows...")
+        label = "video/audio" if not use_audio_table else "video"
+        print(f"  Inserting {len(video_rows):,} {label} rows...")
         ins, fail = batch_insert("videos", video_rows, dry_run=dry_run)
         stats["videos_inserted"] = ins
         stats["videos_failed"] = fail
+
+    # Insert audio (when using audio_files table)
+    if audio_rows:
+        print(f"  Inserting {len(audio_rows):,} audio_files rows...")
+        ins, fail = batch_insert("audio_files", audio_rows, dry_run=dry_run)
+        stats["audio_inserted"] = ins
+        stats["audio_failed"] = fail
 
     return stats
 
@@ -540,6 +625,23 @@ def main():
         action="store_true",
         help="Scan ALL 12 datasets, not just known media datasets",
     )
+    parser.add_argument(
+        "--prefix",
+        type=str,
+        default=None,
+        help="Scan an arbitrary S3 prefix instead of DOJ datasets (e.g., house-oversight/release3/)",
+    )
+    parser.add_argument(
+        "--no-dataset-id",
+        action="store_true",
+        help="Insert with dataset_id=NULL (for non-DOJ sources)",
+    )
+    parser.add_argument(
+        "--source-label",
+        type=str,
+        default=None,
+        help="Custom source label for metadata (e.g., house-oversight-release3)",
+    )
     args = parser.parse_args()
 
     # Validate config
@@ -562,9 +664,55 @@ def main():
     print(f"  Supabase URL: {SUPABASE_URL}")
     print(f"  S3 Endpoint:  {S3_ENDPOINT}")
     print(f"  Dry run:      {args.dry_run}")
+    if args.prefix:
+        print(f"  Prefix:       {args.prefix}")
+    if args.no_dataset_id:
+        print(f"  No dataset ID: True (inserting with dataset_id=NULL)")
+    if args.source_label:
+        print(f"  Source label: {args.source_label}")
     print()
 
-    # Determine which datasets to process
+    # --prefix mode: scan arbitrary S3 prefix, no dataset lookup
+    if args.prefix:
+        prefix = args.prefix.rstrip("/") + "/"
+        print(f"Scanning prefix: {prefix}")
+        print()
+
+        files = s3_list_recursive(prefix)
+        if not files:
+            print("No files found. Exiting.")
+            return
+
+        _show_extension_breakdown(files)
+
+        media_files = [f for f in files if classify_file(f["path"]) is not None]
+        print(f"  Media files: {len(media_files):,}")
+
+        if not media_files:
+            print("No media files found. Exiting.")
+            return
+
+        _show_sample(media_files)
+
+        stats = process_prefix(
+            prefix, media_files, dry_run=args.dry_run, source_label=args.source_label
+        )
+
+        print(f"\n{'=' * 60}")
+        print("SUMMARY")
+        print(f"{'=' * 60}")
+        status = " [DRY RUN]" if args.dry_run else ""
+        print(
+            f"  {prefix}: "
+            f"{stats['images_found']:,} images ({stats['images_inserted']:,} inserted), "
+            f"{stats['videos_found']:,} videos ({stats['videos_inserted']:,} inserted), "
+            f"{stats['audio_found']:,} audio ({stats.get('audio_inserted', 0):,} inserted)"
+            f"{status}"
+        )
+        _print_footer(args.dry_run, stats)
+        return
+
+    # Dataset mode (original behavior)
     if args.datasets:
         dataset_numbers = [int(x.strip()) for x in args.datasets.split(",")]
     elif args.all_datasets:
@@ -582,8 +730,10 @@ def main():
         "audio_found": 0,
         "images_inserted": 0,
         "videos_inserted": 0,
+        "audio_inserted": 0,
         "images_failed": 0,
         "videos_failed": 0,
+        "audio_failed": 0,
     }
 
     for ds_num in dataset_numbers:
@@ -603,16 +753,7 @@ def main():
             print(f"  No files found or listing failed. Skipping.")
             continue
 
-        print(f"  Total files listed: {len(files):,}")
-
-        # Show extension breakdown
-        ext_counts: dict[str, int] = {}
-        for f in files:
-            ext = os.path.splitext(f["path"])[1].lower() or "(none)"
-            ext_counts[ext] = ext_counts.get(ext, 0) + 1
-        print(f"  Extension breakdown:")
-        for ext, count in sorted(ext_counts.items(), key=lambda x: -x[1])[:15]:
-            print(f"    {ext:10s}: {count:>10,}")
+        _show_extension_breakdown(files)
 
         # Filter to only media files
         media_files = [f for f in files if classify_file(f["path"]) is not None]
@@ -622,15 +763,15 @@ def main():
             print(f"  No media files found in this dataset. Skipping.")
             continue
 
-        # Show sample
-        print(f"  Sample files:")
-        for f in media_files[:5]:
-            print(f"    {f['size']:>12,} bytes  {f['path']}")
-        if len(media_files) > 5:
-            print(f"    ... and {len(media_files) - 5:,} more")
+        _show_sample(media_files)
 
         # Process
-        stats = process_dataset(ds_num, media_files, dry_run=args.dry_run)
+        stats = process_dataset(
+            ds_num,
+            media_files,
+            dry_run=args.dry_run,
+            source_label=args.source_label,
+        )
         all_stats.append(stats)
 
         for key in grand_totals:
@@ -666,13 +807,48 @@ def main():
         f"{grand_totals['videos_inserted']:,} inserted, "
         f"{grand_totals['videos_failed']:,} failed"
     )
+    if grand_totals["audio_inserted"] > 0:
+        print(
+            f"    Audio (audio_files table): {grand_totals['audio_inserted']:,} inserted, "
+            f"{grand_totals['audio_failed']:,} failed"
+        )
 
-    if args.dry_run:
+    _print_footer(args.dry_run, grand_totals)
+
+
+def _show_extension_breakdown(files: list[dict]):
+    """Print extension breakdown for a list of files."""
+    print(f"  Total files listed: {len(files):,}")
+    ext_counts: dict[str, int] = {}
+    for f in files:
+        ext = os.path.splitext(f["path"])[1].lower() or "(none)"
+        ext_counts[ext] = ext_counts.get(ext, 0) + 1
+    print(f"  Extension breakdown:")
+    for ext, count in sorted(ext_counts.items(), key=lambda x: -x[1])[:15]:
+        print(f"    {ext:10s}: {count:>10,}")
+
+
+def _show_sample(media_files: list[dict]):
+    """Print sample of media files."""
+    print(f"  Sample files:")
+    for f in media_files[:5]:
+        print(f"    {f['size']:>12,} bytes  {f['path']}")
+    if len(media_files) > 5:
+        print(f"    ... and {len(media_files) - 5:,} more")
+
+
+def _print_footer(dry_run: bool, totals: dict):
+    """Print footer with post-run instructions."""
+    if dry_run:
         print("\n  [DRY RUN] No rows were actually inserted. Remove --dry-run to insert.")
+        return
 
-    if not args.dry_run and (
-        grand_totals["images_inserted"] > 0 or grand_totals["videos_inserted"] > 0
-    ):
+    any_inserted = (
+        totals.get("images_inserted", 0) > 0
+        or totals.get("videos_inserted", 0) > 0
+        or totals.get("audio_inserted", 0) > 0
+    )
+    if any_inserted:
         print(
             f"\n  NOTE: The corpus_totals() RPC uses pg_class reltuples for counts."
         )
@@ -680,6 +856,7 @@ def main():
         print(f"  To force immediate update, run in SQL editor:")
         print(f"    ANALYZE images;")
         print(f"    ANALYZE videos;")
+        print(f"    ANALYZE audio_files;")
 
 
 if __name__ == "__main__":
