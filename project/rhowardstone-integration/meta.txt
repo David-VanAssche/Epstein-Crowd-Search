@@ -1,0 +1,7 @@
+priority: 15
+risk: medium
+depends-on: data-import (Phase 0 document seeding)
+blocked-by: none (Phase 0 can proceed independently)
+reasoning: deepseek (OCR noise filtering heuristics, redaction geometry analysis)
+observability: standard
+notes: Import 6 GB of structured research data from rhowardstone/Epstein-research + adopt 6 forensic techniques
