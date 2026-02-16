@@ -200,59 +200,34 @@ async function insertEmail(
 ): Promise<boolean> {
   const threadId = deriveThreadId(parsed)
 
-  const { error } = await supabase
-    .from('emails')
-    .upsert(
-      {
-        document_id: documentId,
-        message_id: parsed.messageId,
-        thread_id: threadId,
-        in_reply_to: parsed.inReplyTo,
-        subject: parsed.subject,
-        sent_date: parsed.date,
-        from_raw: parsed.from,
-        to_raw: parsed.to,
-        cc_raw: parsed.cc,
-        bcc_raw: parsed.bcc,
-        body: parsed.body,
-        has_attachments: parsed.hasAttachments,
-        attachment_filenames: parsed.attachmentFilenames,
-        confidence: 1.0,
-        metadata: { source: 'erikveland-eml' },
-      },
-      {
-        onConflict: 'message_id',
-        ignoreDuplicates: true,
-      },
-    )
+  const row = {
+    document_id: documentId,
+    message_id: parsed.messageId,
+    thread_id: threadId,
+    in_reply_to: parsed.inReplyTo,
+    subject: parsed.subject,
+    sent_date: parsed.date,
+    from_raw: parsed.from,
+    to_raw: parsed.to,
+    cc_raw: parsed.cc,
+    bcc_raw: parsed.bcc,
+    body: parsed.body,
+    has_attachments: parsed.hasAttachments,
+    attachment_filenames: parsed.attachmentFilenames,
+    confidence: 1.0,
+    metadata: { source: 'erikveland-eml' },
+  }
+
+  // Plain insert — idempotency is handled by documentExistsByStoragePath check.
+  // The partial unique index on message_id (WHERE NOT NULL) prevents true
+  // duplicates at the DB level, but Supabase JS .upsert() doesn't support
+  // partial indexes, so we use insert + catch duplicates.
+  const { error } = await supabase.from('emails').insert(row)
 
   if (error) {
-    // If message_id is null, the unique constraint doesn't apply — try plain insert
-    if (parsed.messageId === null) {
-      const { error: insertError } = await supabase.from('emails').insert({
-        document_id: documentId,
-        message_id: null,
-        thread_id: threadId,
-        in_reply_to: parsed.inReplyTo,
-        subject: parsed.subject,
-        sent_date: parsed.date,
-        from_raw: parsed.from,
-        to_raw: parsed.to,
-        cc_raw: parsed.cc,
-        bcc_raw: parsed.bcc,
-        body: parsed.body,
-        has_attachments: parsed.hasAttachments,
-        attachment_filenames: parsed.attachmentFilenames,
-        confidence: 1.0,
-        metadata: { source: 'erikveland-eml' },
-      })
-      if (insertError) {
-        console.error(`Error inserting email (null message_id):`, insertError.message)
-        return false
-      }
-      return true
-    }
-    console.error(`Error upserting email:`, error.message)
+    // 23505 = unique_violation (duplicate message_id) — safe to skip
+    if (error.code === '23505') return true
+    console.error(`Error inserting email:`, error.message)
     return false
   }
 
