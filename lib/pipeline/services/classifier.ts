@@ -93,6 +93,165 @@ interface ClassificationResult {
   reasoning: string
   tags: DocumentType[]
   raw: Record<string, unknown>
+  classificationMethod?: 'regex' | 'llm'
+}
+
+// --- Regex pre-classification (inspired by rhowardstone/document_classifier.py) ---
+// Rule-based classification via regex patterns. When 3+ patterns match for a type
+// AND the filename hints agree, we can skip the LLM call entirely.
+
+const REGEX_PATTERNS: Partial<Record<DocumentType, RegExp[]>> = {
+  flight_log: [
+    /\b(tail\s*#|N\d{3,5}[A-Z]{0,2})\b/i,
+    /\bpassenger\s+manifest\b/i,
+    /\bflight\s+log\b/i,
+    /\b(departure|arrival)\s+(time|date|airport)\b/i,
+    /\b(pilot|co-?pilot|captain)\b/i,
+  ],
+  deposition: [
+    /\bQ\.\s+/,
+    /\bA\.\s+/,
+    /\bDEPOSITION\b/i,
+    /\bsworn\s+testimony\b/i,
+    /\b(direct|cross)\s+examination\b/i,
+  ],
+  grand_jury_testimony: [
+    /\bGRAND\s+JURY\b/i,
+    /\bQ\.\s+/,
+    /\bA\.\s+/,
+    /\bsworn\b/i,
+    /\bforeperson\b/i,
+  ],
+  subpoena: [
+    /\bSUBPOENA\b/i,
+    /\bRIDER\s*\(Grand\s+Jury\b/i,
+    /\byou\s+are\s+(hereby\s+)?commanded\b/i,
+    /\bduces\s+tecum\b/i,
+  ],
+  financial_record: [
+    /\bWIRE\s+TRANSFER\b/i,
+    /\bACCOUNT\s+STATEMENT\b/i,
+    /\binvoice\s+#/i,
+    /\bbank\s+statement\b/i,
+    /\b(debit|credit)\s+balance\b/i,
+  ],
+  phone_record: [
+    /\bCALL\s+LOG\b/i,
+    /\bCDR\b/,
+    /\bphone\s+record\b/i,
+    /\b(incoming|outgoing)\s+(call|number)\b/i,
+    /\bcall\s+detail\s+record\b/i,
+  ],
+  address_book: [
+    /\baddress\s+book\b/i,
+    /\bcontact\s+list\b/i,
+    /\bphone\s+directory\b/i,
+    /\brolodex\b/i,
+  ],
+  email: [
+    /\bFrom:\s+\S+@\S+/i,
+    /\bTo:\s+\S+@\S+/i,
+    /\bSubject:\s+/i,
+    /\bSent:\s+/i,
+    /\bDate:\s+.*\d{4}/i,
+  ],
+  fbi_report: [
+    /\bFBI\b/,
+    /\bFD-?302\b/i,
+    /\bFederal\s+Bureau\s+of\s+Investigation\b/i,
+    /\bspecial\s+agent\b/i,
+  ],
+  indictment: [
+    /\bINDICTMENT\b/i,
+    /\bCOUNT\s+(ONE|TWO|THREE|[IVX]+|\d+)\b/i,
+    /\bthe\s+grand\s+jury\s+charges\b/i,
+    /\bin\s+violation\s+of\b/i,
+  ],
+}
+
+const FILENAME_HINTS: Record<string, DocumentType[]> = {
+  flight: ['flight_log'],
+  manifest: ['flight_log'],
+  depo: ['deposition'],
+  deposition: ['deposition'],
+  subpoena: ['subpoena'],
+  rider: ['subpoena'],
+  bank: ['financial_record'],
+  wire: ['financial_record'],
+  financial: ['financial_record'],
+  invoice: ['financial_record'],
+  phone: ['phone_record'],
+  call: ['phone_record'],
+  cdr: ['phone_record'],
+  address: ['address_book'],
+  contact: ['address_book'],
+  'black.?book': ['address_book'],
+  email: ['email'],
+  fbi: ['fbi_report'],
+  '302': ['fbi_report'],
+  indictment: ['indictment'],
+  'grand.?jury': ['grand_jury_testimony'],
+}
+
+function regexPreClassify(
+  ocrText: string,
+  filename: string
+): ClassificationResult | null {
+  const textSample = ocrText.length > 5000
+    ? ocrText.slice(0, 4000) + ocrText.slice(-1000)
+    : ocrText
+
+  // Score each document type by regex match count
+  const scores: Array<{ type: DocumentType; matchCount: number }> = []
+
+  for (const [docType, patterns] of Object.entries(REGEX_PATTERNS)) {
+    let matchCount = 0
+    for (const pattern of patterns) {
+      if (pattern.test(textSample)) matchCount++
+    }
+    if (matchCount >= 3) {
+      scores.push({ type: docType as DocumentType, matchCount })
+    }
+  }
+
+  if (scores.length === 0) return null
+
+  // Sort by match count descending
+  scores.sort((a, b) => b.matchCount - a.matchCount)
+  const best = scores[0]
+
+  // Check filename hints for agreement
+  const lowerFilename = filename.toLowerCase()
+  let filenameAgrees = false
+  for (const [hint, types] of Object.entries(FILENAME_HINTS)) {
+    if (new RegExp(hint, 'i').test(lowerFilename) && types.includes(best.type)) {
+      filenameAgrees = true
+      break
+    }
+  }
+
+  // Require both 3+ regex matches AND filename agreement for high-confidence skip
+  if (!filenameAgrees) return null
+
+  // Build secondary tags from other high-scoring types
+  const tags = scores
+    .slice(1)
+    .filter((s) => s.matchCount >= 3)
+    .map((s) => s.type)
+
+  return {
+    type: best.type,
+    confidence: 0.9,
+    reasoning: `Regex pre-classification: ${best.matchCount} pattern matches for ${best.type}, filename agrees`,
+    tags,
+    raw: {
+      method: 'regex',
+      matchCount: best.matchCount,
+      filenameAgrees,
+      allScores: scores,
+    },
+    classificationMethod: 'regex',
+  }
 }
 
 function buildClassifierPrompt(): string {
@@ -219,10 +378,20 @@ export async function handleClassify(
   if (error || !doc) throw new Error(`Document not found: ${documentId}`)
   if (!doc.ocr_text) throw new Error(`Document ${documentId} has no OCR text — run OCR first`)
 
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) throw new Error('GEMINI_API_KEY not set')
+  // Try regex pre-classification first (skip LLM if high-confidence match)
+  const regexResult = regexPreClassify(doc.ocr_text, doc.filename)
 
-  const result = await classifyDocument(doc.ocr_text, doc.filename, apiKey)
+  let result: ClassificationResult
+
+  if (regexResult) {
+    result = regexResult
+    console.log(`[Classify] Regex pre-filter matched: ${result.type} (skipping LLM)`)
+  } else {
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) throw new Error('GEMINI_API_KEY not set')
+    result = await classifyDocument(doc.ocr_text, doc.filename, apiKey)
+    result.classificationMethod = 'llm'
+  }
 
   const { error: updateError } = await supabase
     .from('documents')
@@ -234,6 +403,7 @@ export async function handleClassify(
       metadata: {
         ...((doc as any).metadata || {}),
         classification_reasoning: result.reasoning,
+        classification_method: result.classificationMethod,
         classification_timestamp: new Date().toISOString(),
       },
     })
@@ -244,7 +414,8 @@ export async function handleClassify(
   }
 
   const tagStr = result.tags.length > 0 ? ` [tags: ${result.tags.join(', ')}]` : ''
+  const methodStr = result.classificationMethod === 'regex' ? ' [regex]' : ''
   console.log(
-    `[Classify] Document ${documentId}: ${result.type} (confidence: ${result.confidence.toFixed(2)})${tagStr}`
+    `[Classify] Document ${documentId}: ${result.type} (confidence: ${result.confidence.toFixed(2)})${tagStr}${methodStr}`
   )
 }

@@ -3,10 +3,10 @@
 // Used in the entity-extractor pipeline for consistent matching.
 
 const TITLE_PREFIXES =
-  /\b(dr|mr|mrs|ms|prof|sir|hon|rev|gen|col|sgt|lt|cpt|cmdr|adm)\.?\s+/gi
+  /\b(dr|mr|mrs|ms|prof|sir|hon|rev|gen|col|sgt|lt|cpt|cmdr|adm|sen|rep|gov|amb|det|spc|cpl|maj|brig|capt)\.?\s+/gi
 
 const SUFFIXES =
-  /,?\s+(jr\.?|sr\.?|iii|ii|iv|esq\.?|md|ph\.?d\.?)$/gi
+  /,?\s+(jr\.?|sr\.?|iii|ii|iv|v|esq\.?|md|ph\.?d\.?|dds|jd|cpa|ret\.?)$/gi
 
 export function normalizeEntityName(name: string): string {
   let result = name

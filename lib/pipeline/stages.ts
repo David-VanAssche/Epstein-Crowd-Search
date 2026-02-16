@@ -19,6 +19,8 @@ export enum PipelineStage {
   EMAIL_EXTRACT = 'email_extract',
   FINANCIAL_EXTRACT = 'financial_extract',
   CO_FLIGHT_LINKS = 'co_flight_links',
+  CONGRESSIONAL_SCORE = 'congressional_score',
+  SUBPOENA_EXTRACT = 'subpoena_extract',
   NETWORK_METRICS = 'network_metrics',
   RISK_SCORE = 'risk_score',
 }
@@ -275,6 +277,33 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
       c.hasEmailHeaders,
   },
   {
+    stage: PipelineStage.CONGRESSIONAL_SCORE,
+    label: 'Congressional Priority Scoring',
+    description: 'Score documents by investigation priority using keyword severity, redaction density, and name proximity',
+    dependsOn: [PipelineStage.CRIMINAL_INDICATORS, PipelineStage.REDACTION_DETECT],
+    estimatedCostPerPage: 0.0, // Rule-based, no LLM
+    idempotent: true,
+    maxRetries: 2,
+    alwaysRun: false,
+    // Run for substantive documents — skip peripheral content
+    shouldRun: (c) =>
+      classificationHasAny(c, SWORN_TYPES) ||
+      classificationHasAny(c, OFFICIAL_TYPES) ||
+      classificationHasAny(c, RECORD_TYPES) ||
+      classificationHasAny(c, CORRESPONDENCE_TYPES),
+  },
+  {
+    stage: PipelineStage.SUBPOENA_EXTRACT,
+    label: 'Subpoena Rider Extraction',
+    description: 'Extract structured data from Grand Jury subpoena riders using regex',
+    dependsOn: [PipelineStage.CLASSIFY, PipelineStage.CHUNK],
+    estimatedCostPerPage: 0.0, // Rule-based, no LLM
+    idempotent: true,
+    maxRetries: 2,
+    alwaysRun: false,
+    shouldRun: (c) => c.primary === 'subpoena' || c.tags.includes('subpoena'),
+  },
+  {
     stage: PipelineStage.NETWORK_METRICS,
     label: 'Network Metrics Computation',
     description: 'Compute PageRank, betweenness centrality, and community detection across entity network',
@@ -361,6 +390,8 @@ export function stageToStatus(stage: PipelineStage): ProcessingStatus {
     [PipelineStage.EMAIL_EXTRACT]: PROCESSING_STATUS.ENTITY_EXTRACTION,
     [PipelineStage.FINANCIAL_EXTRACT]: PROCESSING_STATUS.ENTITY_EXTRACTION,
     [PipelineStage.CO_FLIGHT_LINKS]: PROCESSING_STATUS.COMPLETE,
+    [PipelineStage.CONGRESSIONAL_SCORE]: PROCESSING_STATUS.SUMMARIZING,
+    [PipelineStage.SUBPOENA_EXTRACT]: PROCESSING_STATUS.ENTITY_EXTRACTION,
     [PipelineStage.NETWORK_METRICS]: PROCESSING_STATUS.COMPLETE,
     [PipelineStage.RISK_SCORE]: PROCESSING_STATUS.COMPLETE,
   }

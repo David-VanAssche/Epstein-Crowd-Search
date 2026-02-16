@@ -41,6 +41,131 @@ const SYSTEM_PROMPT = `You are classifying people mentioned in the Epstein Crowd
 Respond with a JSON array. Each element: { "name": "...", "category": "...", "confidence": 0.0-1.0 }
 Only use categories from the list above. If uncertain, use "other" with low confidence.`
 
+// --- Rule-based pre-classification (inspired by rhowardstone/victim_classifier.py) ---
+// Classify persons before LLM batch call using context patterns.
+
+interface RuleBasedResult {
+  category: PersonCategory
+  confidence: number
+  protect: boolean
+}
+
+// Known perpetrators — hardcoded for highest confidence
+const KNOWN_PERPETRATORS = new Set([
+  'jeffrey epstein',
+  'ghislaine maxwell',
+])
+
+const VICTIM_CONTEXT_PATTERNS = [
+  /\b(victim|survivor)\b/i,
+  /\bminor\b/i,
+  /\bunderage\b/i,
+  /\bgroomed\b/i,
+  /\brecruited\b/i,
+  /\bjane\s+doe\b/i,
+  /\bsexually?\s+(abused|exploited|assaulted)\b/i,
+  /\bforced\s+to\b/i,
+]
+
+const PERPETRATOR_CONTEXT_PATTERNS = [
+  /\bdefendant\b/i,
+  /\bindicted\b/i,
+  /\bconvicted\b/i,
+  /\bcharged\b/i,
+  /\barrested\b/i,
+  /\bpled\s+guilty\b/i,
+]
+
+const PROFESSIONAL_TITLE_PATTERN = /\b(dr|attorney|judge|senator|governor|professor|detective|agent|officer)\b/i
+
+/**
+ * Attempt to classify a person using rule-based patterns before LLM.
+ * Returns null if no confident classification can be made.
+ */
+function ruleBasedClassify(
+  name: string,
+  contextSnippets: string[]
+): RuleBasedResult | null {
+  const lowerName = name.toLowerCase().trim()
+
+  // Known perpetrators
+  if (KNOWN_PERPETRATORS.has(lowerName)) {
+    return { category: 'associate', confidence: 1.0, protect: false }
+  }
+
+  const allContext = contextSnippets.join(' ')
+
+  // Victim context detection
+  let victimSignals = 0
+  for (const pattern of VICTIM_CONTEXT_PATTERNS) {
+    if (pattern.test(allContext)) victimSignals++
+  }
+
+  if (victimSignals >= 2) {
+    return { category: 'victim', confidence: 0.8, protect: true }
+  }
+
+  // Professional titles reduce victim likelihood
+  if (PROFESSIONAL_TITLE_PATTERN.test(allContext) && victimSignals === 0) {
+    // Don't auto-classify, but note it's likely not a victim
+    return null
+  }
+
+  // Perpetrator context — don't auto-classify but could boost confidence
+  let perpetratorSignals = 0
+  for (const pattern of PERPETRATOR_CONTEXT_PATTERNS) {
+    if (pattern.test(allContext)) perpetratorSignals++
+  }
+
+  // Not enough signal for rule-based classification
+  return null
+}
+
+/**
+ * Determine if an entity's name should be protected (pseudonymized).
+ * Returns true for victims, minors, and entities with high victim confidence.
+ */
+export function shouldProtectName(entity: {
+  category?: string | null
+  metadata?: Record<string, unknown> | null
+}): boolean {
+  if (!entity.category) return false
+
+  // Always protect victims
+  if (entity.category === 'victim') return true
+  if (entity.category === 'minor_victim') return true
+
+  // Protect if category confidence suggests possible victim
+  const confidence = (entity.metadata?.category_confidence as number) ?? 0
+  if (entity.category === 'other' && confidence < 0.3) {
+    // Low-confidence "other" might be a victim — protect by default
+    return true
+  }
+
+  return false
+}
+
+/**
+ * Determine protection status for an entity.
+ */
+export function getProtectionStatus(entity: {
+  category?: string | null
+  metadata?: Record<string, unknown> | null
+}): 'protected' | 'public' | 'review_needed' {
+  if (!entity.category) return 'review_needed'
+
+  if (shouldProtectName(entity)) return 'protected'
+
+  // Known public figures
+  const publicCategories = new Set([
+    'politician', 'royalty', 'celebrity', 'business_leader',
+    'media', 'diplomat', 'military',
+  ])
+  if (publicCategories.has(entity.category)) return 'public'
+
+  return 'review_needed'
+}
+
 export class PersonCategorizerService {
   private apiKey: string
   private supabase: SupabaseClient
@@ -105,14 +230,21 @@ export class PersonCategorizerService {
           continue
         }
 
-        // Update entities with categories
+        // Update entities with categories + protection status
         for (const result of results) {
+          const person = batch.find((p: any) => p.id === result.entity_id) as any
+          const protectionStatus = getProtectionStatus({
+            category: result.category,
+            metadata: { category_confidence: result.confidence },
+          })
+
           const { error: updateError } = await this.supabase
             .from('entities')
             .update({
               category: result.category,
+              protection_status: protectionStatus,
               metadata: {
-                ...(batch.find((p: any) => p.id === result.entity_id) as any)?.metadata,
+                ...person?.metadata,
                 category_confidence: result.confidence,
                 categorized_at: new Date().toISOString(),
               },
@@ -144,7 +276,29 @@ export class PersonCategorizerService {
   private async categorizeBatch(
     persons: Array<{ id: string; name: string; aliases: string[]; description: string | null }>
   ): Promise<CategorizationResult[]> {
-    const personList = persons
+    // Pre-classify using rules — skip LLM for known entities
+    const ruleResults: CategorizationResult[] = []
+    const needsLlm: typeof persons = []
+
+    for (const person of persons) {
+      const ruleResult = ruleBasedClassify(
+        person.name,
+        person.description ? [person.description] : []
+      )
+      if (ruleResult && ruleResult.confidence >= 0.8) {
+        ruleResults.push({
+          entity_id: person.id,
+          category: ruleResult.category,
+          confidence: ruleResult.confidence,
+        })
+      } else {
+        needsLlm.push(person)
+      }
+    }
+
+    if (needsLlm.length === 0) return ruleResults
+
+    const personList = needsLlm
       .map((p, i) => `${i + 1}. "${p.name}"${p.aliases?.length ? ` (aliases: ${p.aliases.join(', ')})` : ''}${p.description ? ` — ${p.description.slice(0, 100)}` : ''}`)
       .join('\n')
 
@@ -177,9 +331,9 @@ export class PersonCategorizerService {
     const parsed: Array<{ name: string; category: string; confidence: number }> = JSON.parse(text)
 
     // Map results back to entity IDs
-    const results: CategorizationResult[] = []
+    const llmResults: CategorizationResult[] = []
     for (const item of parsed) {
-      const person = persons.find(
+      const person = needsLlm.find(
         (p) => p.name.toLowerCase() === item.name.toLowerCase()
       )
       if (!person) continue
@@ -188,14 +342,14 @@ export class PersonCategorizerService {
         ? (item.category as PersonCategory)
         : 'other'
 
-      results.push({
+      llmResults.push({
         entity_id: person.id,
         category,
         confidence: Math.max(0, Math.min(1, item.confidence || 0.5)),
       })
     }
 
-    return results
+    return [...ruleResults, ...llmResults]
   }
 }
 

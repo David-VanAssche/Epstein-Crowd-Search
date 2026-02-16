@@ -92,8 +92,8 @@ async function findOrCreateEntity(
   entity: ExtractedEntity,
   supabase: SupabaseClient
 ): Promise<string | null> {
-  // Filter junk entities before creating
-  if (isJunkEntity(entity.name)) return null
+  // Filter junk entities before creating (pass entity type for type-specific rules)
+  if (isJunkEntity(entity.name, entity.type)) return null
 
   const normalized = normalizeEntityName(entity.name)
   if (!normalized || normalized.length <= 1) return null

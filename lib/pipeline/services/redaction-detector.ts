@@ -6,6 +6,68 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { embedTexts } from './embedding-service'
 
+// --- Visual redaction detection (inspired by rhowardstone/redaction_detector.py) ---
+// Pixel-based pre-filter: detect dark rectangular regions that indicate visual redactions.
+// Uses raw pixel analysis without requiring sharp or other image processing deps.
+
+interface VisualRedactionResult {
+  hasRedaction: boolean
+  confidence: number
+  darkRatio: number
+  darkRows: number
+  detectionMethod: 'visual' | 'text_marker' | 'both'
+}
+
+/**
+ * Detect visual redactions in a grayscale image buffer by counting dark pixels.
+ * Dark rectangular bars (common in DOJ redactions) produce high dark pixel ratios
+ * and contiguous dark row sequences.
+ *
+ * @param pixelData - Raw grayscale pixel data (1 byte per pixel)
+ * @param width - Image width in pixels
+ * @param height - Image height in pixels
+ */
+export function detectVisualRedactions(
+  pixelData: Uint8Array,
+  width: number,
+  height: number
+): VisualRedactionResult {
+  const darkThreshold = 30 // Pixel value below this = "dark"
+  const rowDarkRatio = 0.5 // Row is "dark" if >50% of pixels are dark
+
+  let totalDarkPixels = 0
+  let darkRows = 0
+  const totalPixels = width * height
+
+  for (let y = 0; y < height; y++) {
+    let rowDarkPixels = 0
+    for (let x = 0; x < width; x++) {
+      const pixelValue = pixelData[y * width + x]
+      if (pixelValue < darkThreshold) {
+        rowDarkPixels++
+        totalDarkPixels++
+      }
+    }
+    if (rowDarkPixels / width > rowDarkRatio) {
+      darkRows++
+    }
+  }
+
+  const darkRatio = totalPixels > 0 ? totalDarkPixels / totalPixels : 0
+  const hasRedaction = darkRatio > 0.01 && darkRows >= 5
+  const confidence = hasRedaction
+    ? Math.min(1.0, darkRatio * 10 + darkRows / 100)
+    : 0
+
+  return {
+    hasRedaction,
+    confidence,
+    darkRatio,
+    darkRows,
+    detectionMethod: 'visual',
+  }
+}
+
 interface DetectedRedaction {
   redactionType: string
   charLengthEstimate: number
@@ -112,6 +174,29 @@ export async function handleRedactionDetect(
   await supabase.from('redactions').delete().eq('document_id', documentId)
 
   let totalRedactions = 0
+  let detectionMethod: 'visual' | 'text_marker' | 'both' = 'text_marker'
+
+  // Pre-filter: check if ANY chunk has redaction text markers before calling LLM
+  const hasAnyTextMarkers = chunks.some((chunk: any) =>
+    chunk.content.includes('[REDACTED]') || chunk.content.includes('[REDACT')
+  )
+
+  if (!hasAnyTextMarkers) {
+    // No text markers found — skip LLM entirely
+    console.log(`[RedactionDetect] Document ${documentId}: no redaction markers found, skipping LLM`)
+    await supabase
+      .from('documents')
+      .update({
+        is_redacted: false,
+        redaction_count: 0,
+        metadata: {
+          redaction_detection_method: 'text_marker',
+          redaction_detection_timestamp: new Date().toISOString(),
+        },
+      })
+      .eq('id', documentId)
+    return
+  }
 
   for (const chunk of chunks) {
     try {
@@ -156,12 +241,23 @@ export async function handleRedactionDetect(
     }
   }
 
-  // Update document redaction flags
+  // Update document redaction flags with detection method metadata
+  const { data: existingDoc } = await supabase
+    .from('documents')
+    .select('metadata')
+    .eq('id', documentId)
+    .single()
+
   await supabase
     .from('documents')
     .update({
       is_redacted: totalRedactions > 0,
       redaction_count: totalRedactions,
+      metadata: {
+        ...((existingDoc as any)?.metadata || {}),
+        redaction_detection_method: detectionMethod,
+        redaction_detection_timestamp: new Date().toISOString(),
+      },
     })
     .eq('id', documentId)
 
