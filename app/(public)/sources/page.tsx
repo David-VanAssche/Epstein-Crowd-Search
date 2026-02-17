@@ -2,21 +2,11 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { fetchApi } from '@/lib/api/client'
-
-const STATUS_COLORS: Record<string, string> = {
-  ingested: 'bg-green-500/20 text-green-400 border-green-500/30',
-  in_progress: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  partial: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  pending: 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30',
-  failed: 'bg-red-500/20 text-red-400 border-red-500/30',
-  unavailable: 'bg-zinc-700/20 text-zinc-500 border-zinc-700/30',
-}
 
 const SOURCE_TYPE_LABELS: Record<string, string> = {
   government: 'Government',
@@ -33,7 +23,6 @@ interface DataSource {
   url: string | null
   description: string | null
   data_type: string
-  status: string
   expected_count: number | null
   ingested_count: number
 }
@@ -65,7 +54,6 @@ export default function SourcesPage() {
                 <TableRow>
                   <TableHead>Source</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Pages / Files</TableHead>
                 </TableRow>
               </TableHeader>
@@ -90,11 +78,6 @@ export default function SourcesPage() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {SOURCE_TYPE_LABELS[source.source_type] || source.source_type}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={STATUS_COLORS[source.status] || ''}>
-                        {source.status}
-                      </Badge>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {source.expected_count
