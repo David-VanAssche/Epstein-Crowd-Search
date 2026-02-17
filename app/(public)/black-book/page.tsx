@@ -2,10 +2,12 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Input } from '@/components/ui/input'
+import { Card, CardContent } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Search, BookUser, Loader2 } from 'lucide-react'
 import { AlphabetNav } from '@/components/black-book/AlphabetNav'
-import { BlackBookCard } from '@/components/black-book/BlackBookCard'
 import { useBlackBook } from '@/lib/hooks/useBlackBook'
 import { Button } from '@/components/ui/button'
 
@@ -72,7 +74,7 @@ export default function BlackBookPage() {
           <AlphabetNav activeLetter={letter} onSelect={handleLetterSelect} />
         </div>
 
-        {/* Card grid */}
+        {/* Data table */}
         <div className="min-w-0 flex-1">
           {isLoading && entries.length === 0 ? (
             <div className="flex h-64 items-center justify-center">
@@ -86,11 +88,60 @@ export default function BlackBookPage() {
             </div>
           ) : (
             <>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {entries.map((entry) => (
-                  <BlackBookCard key={entry.id} entry={entry} />
-                ))}
-              </div>
+              <Card className="border-border bg-surface">
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Phone(s)</TableHead>
+                        <TableHead className="hidden md:table-cell">Address</TableHead>
+                        <TableHead className="hidden lg:table-cell">Email</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {entries.map((entry) => {
+                        const row = (
+                          <TableRow key={entry.id} className={entry.linked_entity ? 'cursor-pointer hover:bg-surface-elevated' : ''}>
+                            <TableCell className="font-medium">
+                              {entry.linked_entity ? (
+                                <Link href={`/entity/${entry.linked_entity.id}`} className="text-info hover:underline">
+                                  {entry.name}
+                                </Link>
+                              ) : (
+                                entry.name
+                              )}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {entry.phones.length > 0
+                                ? entry.phones.join(', ')
+                                : <span className="text-muted-foreground/50">&mdash;</span>}
+                            </TableCell>
+                            <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
+                              {entry.addresses.length > 0
+                                ? (
+                                  <span>
+                                    {entry.addresses[0]}
+                                    {entry.addresses.length > 1 && (
+                                      <span className="text-muted-foreground/60"> +{entry.addresses.length - 1} more</span>
+                                    )}
+                                  </span>
+                                )
+                                : <span className="text-muted-foreground/50">&mdash;</span>}
+                            </TableCell>
+                            <TableCell className="hidden text-sm text-muted-foreground lg:table-cell">
+                              {entry.emails && entry.emails.length > 0
+                                ? entry.emails.join(', ')
+                                : <span className="text-muted-foreground/50">&mdash;</span>}
+                            </TableCell>
+                          </TableRow>
+                        )
+                        return row
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
 
               {/* Pagination */}
               {(hasMore || page > 1) && (

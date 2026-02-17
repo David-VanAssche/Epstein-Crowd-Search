@@ -6,6 +6,7 @@ export interface BlackBookEntry {
   name: string
   phones: string[]
   addresses: string[]
+  emails: string[]
   relationships: string[]
   notes: string | null
   linked_entity: {
