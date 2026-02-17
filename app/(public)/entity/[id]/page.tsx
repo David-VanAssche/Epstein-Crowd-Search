@@ -1,11 +1,12 @@
 // app/(public)/entity/[id]/page.tsx
 'use client'
 
-import { use } from 'react'
+import { use, useEffect } from 'react'
 import { EntityProfile } from '@/components/entity/EntityProfile'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { useEntity } from '@/lib/hooks/useEntity'
+import { setBreadcrumbLabel } from '@/lib/breadcrumbs'
 
 interface EntityPageProps {
   params: Promise<{ id: string }>
@@ -14,6 +15,12 @@ interface EntityPageProps {
 export default function EntityPage({ params }: EntityPageProps) {
   const { id } = use(params)
   const { entity, isLoading } = useEntity(id)
+
+  useEffect(() => {
+    if (entity?.name) {
+      setBreadcrumbLabel(id, entity.name)
+    }
+  }, [id, entity?.name])
 
   if (isLoading) {
     return (

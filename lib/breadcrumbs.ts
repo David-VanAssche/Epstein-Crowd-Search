@@ -32,6 +32,16 @@ export interface BreadcrumbItem {
   href: string
 }
 
+/**
+ * Optional overrides for dynamic segments (e.g., entity UUIDs → entity names).
+ * Key is the full path segment, value is the display label.
+ */
+let dynamicLabels: Record<string, string> = {}
+
+export function setBreadcrumbLabel(segment: string, label: string) {
+  dynamicLabels = { ...dynamicLabels, [segment]: label }
+}
+
 export function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
   if (pathname === '/') return []
 
@@ -41,7 +51,7 @@ export function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
   let currentPath = ''
   for (const segment of segments) {
     currentPath += `/${segment}`
-    const label = ROUTE_LABELS[segment] ?? formatSegment(segment)
+    const label = dynamicLabels[segment] ?? ROUTE_LABELS[segment] ?? formatSegment(segment)
     crumbs.push({ label, href: currentPath })
   }
 
