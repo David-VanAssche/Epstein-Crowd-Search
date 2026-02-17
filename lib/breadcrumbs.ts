@@ -59,9 +59,9 @@ export function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
 }
 
 function formatSegment(segment: string): string {
-  // If it looks like a UUID or ID, truncate it
+  // If it looks like a UUID or ID, return empty — will be filled by setBreadcrumbLabel()
   if (segment.length > 20 || /^[0-9a-f-]{8,}$/i.test(segment)) {
-    return segment.slice(0, 8) + '...'
+    return ''
   }
   // Convert kebab-case to Title Case
   return segment

@@ -8,6 +8,7 @@ import { ChunkNavigator } from '@/components/document/ChunkNavigator'
 import { RelatedDocuments } from '@/components/document/RelatedDocuments'
 import { ContentWarning } from '@/components/document/ContentWarning'
 import { AnnotationSidebar } from '@/components/annotations/AnnotationSidebar'
+import { DocumentBreadcrumb } from '@/components/document/DocumentBreadcrumb'
 
 interface DocumentPageProps {
   params: Promise<{ id: string }>
@@ -41,6 +42,7 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
 
   return (
     <div className="flex flex-col gap-6 px-4 py-6 lg:flex-row lg:px-8">
+      <DocumentBreadcrumb id={id} filename={document.document?.filename ?? 'Document'} />
       {/* Main Content */}
       <div className="flex-1 space-y-6">
         <ContentWarning />

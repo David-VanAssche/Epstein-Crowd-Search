@@ -45,18 +45,21 @@ export function TopBar() {
             <BreadcrumbItem>
               <BreadcrumbLink href="/">Home</BreadcrumbLink>
             </BreadcrumbItem>
-            {crumbs.map((crumb, i) => (
-              <React.Fragment key={crumb.href}>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  {i === crumbs.length - 1 ? (
-                    <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                  ) : (
-                    <BreadcrumbLink href={crumb.href}>{crumb.label}</BreadcrumbLink>
-                  )}
-                </BreadcrumbItem>
-              </React.Fragment>
-            ))}
+            {crumbs.map((crumb, i) => {
+              if (!crumb.label) return null
+              return (
+                <React.Fragment key={crumb.href}>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem>
+                    {i === crumbs.length - 1 ? (
+                      <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                    ) : (
+                      <BreadcrumbLink href={crumb.href}>{crumb.label}</BreadcrumbLink>
+                    )}
+                  </BreadcrumbItem>
+                </React.Fragment>
+              )
+            })}
           </BreadcrumbList>
         </Breadcrumb>
       </nav>
