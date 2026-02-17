@@ -1,0 +1,1951 @@
+{
+  "_manifests": {
+    "files": 36,
+    "size": 66998440,
+    "extensions": {
+      ".json": {
+        "count": 36,
+        "size_mb": 63.89
+      }
+    },
+    "subfolders": {}
+  },
+  "court-records": {
+    "files": 304,
+    "size": 92355364,
+    "extensions": {
+      ".pdf": {
+        "count": 302,
+        "size_mb": 49.21
+      },
+      ".zip": {
+        "count": 1,
+        "size_mb": 37.28
+      },
+      ".txt": {
+        "count": 1,
+        "size_mb": 1.58
+      }
+    },
+    "subfolders": {
+      "florida-v-epstein": {
+        "files": 99,
+        "size_mb": 5.06,
+        "extensions": {
+          ".pdf": {
+            "count": 99,
+            "size_mb": 5.06
+          }
+        }
+      },
+      "giuffre-v-maxwell": {
+        "files": 3,
+        "size_mb": 61.7,
+        "extensions": {
+          ".zip": {
+            "count": 1,
+            "size_mb": 37.28
+          },
+          ".pdf": {
+            "count": 1,
+            "size_mb": 22.83
+          },
+          ".txt": {
+            "count": 1,
+            "size_mb": 1.58
+          }
+        }
+      },
+      "maxwell-criminal": {
+        "files": 3,
+        "size_mb": 11.14,
+        "extensions": {
+          ".pdf": {
+            "count": 3,
+            "size_mb": 11.14
+          }
+        }
+      },
+      "usvi-v-jpmorgan": {
+        "files": 199,
+        "size_mb": 10.17,
+        "extensions": {
+          ".pdf": {
+            "count": 199,
+            "size_mb": 10.17
+          }
+        }
+      }
+    }
+  },
+  "documentcloud": {
+    "files": 12,
+    "size": 1059000229,
+    "extensions": {
+      ".pdf": {
+        "count": 12,
+        "size_mb": 1009.94
+      }
+    },
+    "subfolders": {}
+  },
+  "doj": {
+    "note": "Large folder - structure only",
+    "subfolders": {
+      "dataset-1": {
+        "sub_prefixes": [
+          "VOL00001"
+        ]
+      },
+      "dataset-10": {
+        "sub_prefixes": [
+          "VOL00010"
+        ]
+      },
+      "dataset-11": {
+        "sub_prefixes": [
+          "VOL00011"
+        ]
+      },
+      "dataset-12": {
+        "sub_prefixes": [
+          "VOL00012"
+        ]
+      },
+      "dataset-2": {
+        "sub_prefixes": [
+          "VOL00002"
+        ]
+      },
+      "dataset-3": {
+        "sub_prefixes": [
+          "VOL00003"
+        ]
+      },
+      "dataset-4": {
+        "sub_prefixes": [
+          "VOL00004"
+        ]
+      },
+      "dataset-5": {
+        "sub_prefixes": [
+          "VOL00005"
+        ]
+      },
+      "dataset-6": {
+        "sub_prefixes": [
+          "DataSet6"
+        ]
+      },
+      "dataset-7": {
+        "sub_prefixes": [
+          "VOL00007"
+        ]
+      },
+      "dataset-8": {
+        "sub_prefixes": [
+          "VOL00008"
+        ]
+      },
+      "dataset-9": {
+        "sub_prefixes": [
+          "DataSet_9"
+        ]
+      },
+      "test-batch": {
+        "sub_prefixes": []
+      }
+    },
+    "datasets": {
+      "dataset-1": {
+        "files": 3163,
+        "size_mb": 1267.67,
+        "extensions": {
+          ".pdf": {
+            "count": 3158,
+            "size_mb": 1267.03
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 0.11
+          },
+          ".dii": {
+            "count": 1,
+            "size_mb": 0.17
+          },
+          ".lfp": {
+            "count": 1,
+            "size_mb": 0.19
+          },
+          ".lst": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 0.17
+          }
+        }
+      },
+      "dataset-10": {
+        "files": 504029,
+        "size_mb": 77029.74,
+        "extensions": {
+          ".pdf": {
+            "count": 503154,
+            "size_mb": 69955.09
+          },
+          ".mp4": {
+            "count": 648,
+            "size_mb": 5320.79
+          },
+          ".mov": {
+            "count": 154,
+            "size_mb": 1640.49
+          },
+          ".m4v": {
+            "count": 25,
+            "size_mb": 0.4
+          },
+          ".m4a": {
+            "count": 17,
+            "size_mb": 33.7
+          },
+          ".opus": {
+            "count": 16,
+            "size_mb": 0.75
+          },
+          ".amr": {
+            "count": 5,
+            "size_mb": 0.08
+          },
+          ".wav": {
+            "count": 5,
+            "size_mb": 4.84
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 16.79
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 51.71
+          },
+          ".3gp": {
+            "count": 1,
+            "size_mb": 0.18
+          },
+          ".pluginpayloadattachment": {
+            "count": 1,
+            "size_mb": 4.64
+          },
+          ".mp3": {
+            "count": 1,
+            "size_mb": 0.28
+          }
+        }
+      },
+      "dataset-11": {
+        "files": 331661,
+        "size_mb": 27446.39,
+        "extensions": {
+          ".pdf": {
+            "count": 331655,
+            "size_mb": 27396.69
+          },
+          ".m4v": {
+            "count": 4,
+            "size_mb": 10.37
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 11.07
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 28.27
+          }
+        }
+      },
+      "dataset-12": {
+        "files": 154,
+        "size_mb": 119.89,
+        "extensions": {
+          ".pdf": {
+            "count": 152,
+            "size_mb": 119.8
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 0.01
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 0.08
+          }
+        }
+      },
+      "dataset-2": {
+        "files": 577,
+        "size_mb": 631.65,
+        "extensions": {
+          ".pdf": {
+            "count": 574,
+            "size_mb": 630.19
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 0.02
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 0.04
+          },
+          ".avi": {
+            "count": 1,
+            "size_mb": 1.4
+          }
+        }
+      },
+      "dataset-3": {
+        "files": 68,
+        "size_mb": 558.67,
+        "extensions": {
+          ".pdf": {
+            "count": 66,
+            "size_mb": 558.57
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 0.1
+          }
+        }
+      },
+      "dataset-4": {
+        "files": 154,
+        "size_mb": 358.49,
+        "extensions": {
+          ".pdf": {
+            "count": 152,
+            "size_mb": 358.34
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 0.01
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 0.14
+          }
+        }
+      },
+      "dataset-5": {
+        "files": 122,
+        "size_mb": 61.59,
+        "extensions": {
+          ".pdf": {
+            "count": 120,
+            "size_mb": 61.58
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 0.01
+          }
+        }
+      },
+      "dataset-6": {
+        "files": 15,
+        "size_mb": 53.02,
+        "extensions": {
+          ".pdf": {
+            "count": 13,
+            "size_mb": 53.0
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 0.03
+          }
+        }
+      },
+      "dataset-7": {
+        "files": 19,
+        "size_mb": 98.29,
+        "extensions": {
+          ".pdf": {
+            "count": 17,
+            "size_mb": 98.25
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 0.04
+          }
+        }
+      },
+      "dataset-8": {
+        "files": 11035,
+        "size_mb": 10911.31,
+        "extensions": {
+          ".pdf": {
+            "count": 10595,
+            "size_mb": 1821.77
+          },
+          ".mp4": {
+            "count": 418,
+            "size_mb": 9082.43
+          },
+          ".xlsx": {
+            "count": 10,
+            "size_mb": 0.61
+          },
+          ".csv": {
+            "count": 4,
+            "size_mb": 2.49
+          },
+          ".m4a": {
+            "count": 3,
+            "size_mb": 1.18
+          },
+          ".xls": {
+            "count": 2,
+            "size_mb": 0.03
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 0.35
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 1.59
+          },
+          ".mp3": {
+            "count": 1,
+            "size_mb": 0.86
+          }
+        }
+      },
+      "dataset-9": {
+        "files": 531257,
+        "size_mb": 96859.8,
+        "extensions": {
+          ".pdf": {
+            "count": 531255,
+            "size_mb": 96775.69
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 17.73
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 66.38
+          }
+        }
+      },
+      "test-batch": {
+        "files": 50,
+        "size_mb": 2.98,
+        "extensions": {
+          ".pdf": {
+            "count": 50,
+            "size_mb": 2.98
+          }
+        }
+      }
+    }
+  },
+  "enrichment": {
+    "files": 9,
+    "size": 12791899,
+    "extensions": {
+      ".csv": {
+        "count": 4,
+        "size_mb": 0.06
+      },
+      ".jsonl": {
+        "count": 4,
+        "size_mb": 12.14
+      },
+      ".json": {
+        "count": 1,
+        "size_mb": 0.0
+      }
+    },
+    "subfolders": {
+      "epsteininvestigation-org": {
+        "files": 9,
+        "size_mb": 12.2,
+        "extensions": {
+          ".csv": {
+            "count": 4,
+            "size_mb": 0.06
+          },
+          ".jsonl": {
+            "count": 4,
+            "size_mb": 12.14
+          },
+          ".json": {
+            "count": 1,
+            "size_mb": 0.0
+          }
+        }
+      }
+    }
+  },
+  "github": {
+    "files": 129360,
+    "size": 8010787567,
+    "extensions": {
+      ".txt": {
+        "count": 38954,
+        "size_mb": 4394.84
+      },
+      ".eml": {
+        "count": 34431,
+        "size_mb": 2073.85
+      },
+      ".json": {
+        "count": 29612,
+        "size_mb": 244.81
+      },
+      ".jsonl": {
+        "count": 23115,
+        "size_mb": 138.29
+      },
+      ".meta": {
+        "count": 906,
+        "size_mb": 0.49
+      },
+      ".html": {
+        "count": 482,
+        "size_mb": 3.76
+      },
+      ".jpg": {
+        "count": 446,
+        "size_mb": 416.97
+      },
+      ".ts": {
+        "count": 285,
+        "size_mb": 1.73
+      },
+      ".webp": {
+        "count": 241,
+        "size_mb": 3.56
+      },
+      ".tsx": {
+        "count": 204,
+        "size_mb": 2.21
+      },
+      ".com order has shipped (": {
+        "count": 164,
+        "size_mb": 6.26
+      },
+      "(no ext)": {
+        "count": 121,
+        "size_mb": 13.26
+      },
+      ".md": {
+        "count": 74,
+        "size_mb": 0.65
+      },
+      ".csv": {
+        "count": 60,
+        "size_mb": 108.13
+      },
+      ".py": {
+        "count": 55,
+        "size_mb": 0.43
+      },
+      ".sql": {
+        "count": 44,
+        "size_mb": 0.11
+      },
+      ".pdf": {
+        "count": 18,
+        "size_mb": 71.64
+      },
+      ".js": {
+        "count": 15,
+        "size_mb": 1.69
+      },
+      ".png": {
+        "count": 14,
+        "size_mb": 13.85
+      },
+      ".torrent": {
+        "count": 14,
+        "size_mb": 41.78
+      },
+      ".css": {
+        "count": 10,
+        "size_mb": 0.67
+      },
+      ".sh": {
+        "count": 10,
+        "size_mb": 0.04
+      },
+      ".njk": {
+        "count": 10,
+        "size_mb": 0.06
+      },
+      ".com order (": {
+        "count": 10,
+        "size_mb": 0.05
+      },
+      ".yml": {
+        "count": 9,
+        "size_mb": 0.01
+      },
+      ".rtf": {
+        "count": 7,
+        "size_mb": 0.15
+      },
+      ".com order(": {
+        "count": 6,
+        "size_mb": 0.1
+      },
+      ".example": {
+        "count": 5,
+        "size_mb": 0.01
+      },
+      ".com order ": {
+        "count": 4,
+        "size_mb": 0.23
+      },
+      ".gz": {
+        "count": 4,
+        "size_mb": 22.8
+      },
+      ".svg": {
+        "count": 3,
+        "size_mb": 0.01
+      },
+      ".zip": {
+        "count": 3,
+        "size_mb": 46.68
+      },
+      ".mjs": {
+        "count": 2,
+        "size_mb": 0.0
+      },
+      ".pdf ": {
+        "count": 2,
+        "size_mb": 0.0
+      },
+      ".com (order ": {
+        "count": 2,
+        "size_mb": 0.01
+      },
+      ". you're ": {
+        "count": 2,
+        "size_mb": 0.04
+      },
+      ".com feedback request for recent order": {
+        "count": 2,
+        "size_mb": 0.02
+      },
+      ".conf": {
+        "count": 2,
+        "size_mb": 0.01
+      },
+      ".db": {
+        "count": 2,
+        "size_mb": 27.41
+      },
+      ".ini": {
+        "count": 1,
+        "size_mb": 0.0
+      },
+      ".mako": {
+        "count": 1,
+        "size_mb": 0.0
+      },
+      ".lock": {
+        "count": 1,
+        "size_mb": 0.18
+      },
+      ".production": {
+        "count": 1,
+        "size_mb": 0.0
+      },
+      ".cjs": {
+        "count": 1,
+        "size_mb": 0.0
+      },
+      ".snapshot-shm": {
+        "count": 1,
+        "size_mb": 0.03
+      },
+      ".snapshot-wal": {
+        "count": 1,
+        "size_mb": 0.0
+      },
+      ".yaml": {
+        "count": 1,
+        "size_mb": 0.25
+      },
+      ".dat": {
+        "count": 1,
+        "size_mb": 0.09
+      },
+      ".opt": {
+        "count": 1,
+        "size_mb": 2.54
+      }
+    },
+    "subfolders": {
+      "benbaessler": {
+        "files": 23224,
+        "size_mb": 146.08,
+        "extensions": {
+          ".jsonl": {
+            "count": 23115,
+            "size_mb": 138.29
+          },
+          ".tsx": {
+            "count": 22,
+            "size_mb": 0.07
+          },
+          ".py": {
+            "count": 21,
+            "size_mb": 0.07
+          },
+          ".ts": {
+            "count": 20,
+            "size_mb": 0.07
+          },
+          ".md": {
+            "count": 12,
+            "size_mb": 0.04
+          },
+          "(no ext)": {
+            "count": 11,
+            "size_mb": 0.01
+          },
+          ".yml": {
+            "count": 5,
+            "size_mb": 0.0
+          },
+          ".json": {
+            "count": 4,
+            "size_mb": 7.31
+          },
+          ".example": {
+            "count": 3,
+            "size_mb": 0.01
+          },
+          ".sh": {
+            "count": 3,
+            "size_mb": 0.02
+          },
+          ".mjs": {
+            "count": 2,
+            "size_mb": 0.0
+          },
+          ".ini": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".mako": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".txt": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".lock": {
+            "count": 1,
+            "size_mb": 0.18
+          },
+          ".css": {
+            "count": 1,
+            "size_mb": 0.01
+          },
+          ".svg": {
+            "count": 1,
+            "size_mb": 0.0
+          }
+        }
+      },
+      "epstein-docs": {
+        "files": 29525,
+        "size_mb": 136.84,
+        "extensions": {
+          ".json": {
+            "count": 29503,
+            "size_mb": 136.69
+          },
+          ".njk": {
+            "count": 10,
+            "size_mb": 0.06
+          },
+          ".py": {
+            "count": 5,
+            "size_mb": 0.07
+          },
+          "(no ext)": {
+            "count": 2,
+            "size_mb": 0.0
+          },
+          ".js": {
+            "count": 1,
+            "size_mb": 0.02
+          },
+          ".example": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".yml": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".md": {
+            "count": 1,
+            "size_mb": 0.01
+          },
+          ".txt": {
+            "count": 1,
+            "size_mb": 0.0
+          }
+        }
+      },
+      "erikveland": {
+        "files": 42120,
+        "size_mb": 2800.39,
+        "extensions": {
+          ".eml": {
+            "count": 34431,
+            "size_mb": 2073.85
+          },
+          ".txt": {
+            "count": 4675,
+            "size_mb": 95.13
+          },
+          ".meta": {
+            "count": 906,
+            "size_mb": 0.49
+          },
+          ".html": {
+            "count": 478,
+            "size_mb": 3.64
+          },
+          ".jpg": {
+            "count": 446,
+            "size_mb": 416.97
+          },
+          ".webp": {
+            "count": 241,
+            "size_mb": 3.56
+          },
+          ".ts": {
+            "count": 239,
+            "size_mb": 1.5
+          },
+          ".tsx": {
+            "count": 174,
+            "size_mb": 2.05
+          },
+          ".com order has shipped (": {
+            "count": 164,
+            "size_mb": 6.26
+          },
+          "(no ext)": {
+            "count": 97,
+            "size_mb": 13.25
+          },
+          ".json": {
+            "count": 76,
+            "size_mb": 90.22
+          },
+          ".sql": {
+            "count": 43,
+            "size_mb": 0.1
+          },
+          ".md": {
+            "count": 36,
+            "size_mb": 0.3
+          },
+          ".csv": {
+            "count": 26,
+            "size_mb": 7.24
+          },
+          ".pdf": {
+            "count": 18,
+            "size_mb": 71.64
+          },
+          ".png": {
+            "count": 11,
+            "size_mb": 13.26
+          },
+          ".com order (": {
+            "count": 10,
+            "size_mb": 0.05
+          },
+          ".rtf": {
+            "count": 7,
+            "size_mb": 0.15
+          },
+          ".com order(": {
+            "count": 6,
+            "size_mb": 0.1
+          },
+          ".sh": {
+            "count": 5,
+            "size_mb": 0.02
+          },
+          ".com order ": {
+            "count": 4,
+            "size_mb": 0.23
+          },
+          ".js": {
+            "count": 4,
+            "size_mb": 0.01
+          },
+          ".py": {
+            "count": 3,
+            "size_mb": 0.02
+          },
+          ".yml": {
+            "count": 2,
+            "size_mb": 0.01
+          },
+          ".pdf ": {
+            "count": 2,
+            "size_mb": 0.0
+          },
+          ".com (order ": {
+            "count": 2,
+            "size_mb": 0.01
+          },
+          ". you're ": {
+            "count": 2,
+            "size_mb": 0.04
+          },
+          ".com feedback request for recent order": {
+            "count": 2,
+            "size_mb": 0.02
+          },
+          ".conf": {
+            "count": 2,
+            "size_mb": 0.01
+          },
+          ".css": {
+            "count": 2,
+            "size_mb": 0.01
+          },
+          ".example": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".production": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".cjs": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".snapshot-shm": {
+            "count": 1,
+            "size_mb": 0.03
+          },
+          ".snapshot-wal": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".yaml": {
+            "count": 1,
+            "size_mb": 0.25
+          }
+        }
+      },
+      "lmsband": {
+        "files": 21,
+        "size_mb": 28.82,
+        "extensions": {
+          ".py": {
+            "count": 7,
+            "size_mb": 0.1
+          },
+          ".js": {
+            "count": 3,
+            "size_mb": 0.5
+          },
+          ".png": {
+            "count": 3,
+            "size_mb": 0.59
+          },
+          ".txt": {
+            "count": 2,
+            "size_mb": 0.0
+          },
+          ".css": {
+            "count": 2,
+            "size_mb": 0.22
+          },
+          ".json": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          "(no ext)": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".md": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".db": {
+            "count": 1,
+            "size_mb": 27.41
+          }
+        }
+      },
+      "markramm": {
+        "files": 2915,
+        "size_mb": 53.98,
+        "extensions": {
+          ".txt": {
+            "count": 2898,
+            "size_mb": 53.77
+          },
+          ".md": {
+            "count": 11,
+            "size_mb": 0.17
+          },
+          ".py": {
+            "count": 4,
+            "size_mb": 0.05
+          },
+          "(no ext)": {
+            "count": 2,
+            "size_mb": 0.0
+          }
+        }
+      },
+      "maxandrews": {
+        "files": 29821,
+        "size_mb": 309.04,
+        "extensions": {
+          ".txt": {
+            "count": 29728,
+            "size_mb": 205.45
+          },
+          ".ts": {
+            "count": 26,
+            "size_mb": 0.17
+          },
+          ".csv": {
+            "count": 26,
+            "size_mb": 98.66
+          },
+          ".json": {
+            "count": 10,
+            "size_mb": 1.98
+          },
+          ".tsx": {
+            "count": 8,
+            "size_mb": 0.09
+          },
+          "(no ext)": {
+            "count": 4,
+            "size_mb": 0.0
+          },
+          ".md": {
+            "count": 4,
+            "size_mb": 0.04
+          },
+          ".js": {
+            "count": 3,
+            "size_mb": 0.0
+          },
+          ".sh": {
+            "count": 2,
+            "size_mb": 0.0
+          },
+          ".svg": {
+            "count": 2,
+            "size_mb": 0.01
+          },
+          ".css": {
+            "count": 2,
+            "size_mb": 0.0
+          },
+          ".py": {
+            "count": 1,
+            "size_mb": 0.01
+          },
+          ".sql": {
+            "count": 1,
+            "size_mb": 0.01
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 0.09
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 2.54
+          },
+          ".db": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".html": {
+            "count": 1,
+            "size_mb": 0.0
+          }
+        }
+      },
+      "phelix-epstein-network": {
+        "files": 41,
+        "size_mb": 9.31,
+        "extensions": {
+          ".py": {
+            "count": 14,
+            "size_mb": 0.12
+          },
+          ".json": {
+            "count": 8,
+            "size_mb": 5.79
+          },
+          ".md": {
+            "count": 4,
+            "size_mb": 0.03
+          },
+          ".js": {
+            "count": 4,
+            "size_mb": 1.17
+          },
+          ".csv": {
+            "count": 3,
+            "size_mb": 1.66
+          },
+          ".html": {
+            "count": 3,
+            "size_mb": 0.11
+          },
+          ".css": {
+            "count": 3,
+            "size_mb": 0.43
+          },
+          "(no ext)": {
+            "count": 2,
+            "size_mb": 0.0
+          }
+        }
+      },
+      "rhowardstone": {
+        "files": 13,
+        "size_mb": 25.89,
+        "extensions": {
+          ".gz": {
+            "count": 4,
+            "size_mb": 22.8
+          },
+          ".json": {
+            "count": 4,
+            "size_mb": 2.81
+          },
+          ".csv": {
+            "count": 3,
+            "size_mb": 0.28
+          },
+          "(no ext)": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".md": {
+            "count": 1,
+            "size_mb": 0.01
+          }
+        }
+      },
+      "s0fskr1p": {
+        "files": 1643,
+        "size_mb": 4038.67,
+        "extensions": {
+          ".txt": {
+            "count": 1640,
+            "size_mb": 4038.67
+          },
+          "(no ext)": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".yml": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".md": {
+            "count": 1,
+            "size_mb": 0.0
+          }
+        }
+      },
+      "yung-megafone": {
+        "files": 37,
+        "size_mb": 90.66,
+        "extensions": {
+          ".torrent": {
+            "count": 14,
+            "size_mb": 41.78
+          },
+          ".txt": {
+            "count": 9,
+            "size_mb": 1.84
+          },
+          ".json": {
+            "count": 6,
+            "size_mb": 0.01
+          },
+          ".md": {
+            "count": 3,
+            "size_mb": 0.05
+          },
+          ".zip": {
+            "count": 3,
+            "size_mb": 46.68
+          },
+          ".csv": {
+            "count": 2,
+            "size_mb": 0.29
+          }
+        }
+      }
+    }
+  },
+  "house-oversight": {
+    "files": 42822,
+    "size": 159232696233,
+    "extensions": {
+      "(no ext)": {
+        "count": 16680,
+        "size_mb": 49886.14
+      },
+      ".jpeg": {
+        "count": 15247,
+        "size_mb": 11070.47
+      },
+      ".jpg": {
+        "count": 7850,
+        "size_mb": 12691.71
+      },
+      ".txt": {
+        "count": 2895,
+        "size_mb": 53.77
+      },
+      ".wav": {
+        "count": 56,
+        "size_mb": 10762.38
+      },
+      ".tif": {
+        "count": 28,
+        "size_mb": 2.6
+      },
+      ".mp4": {
+        "count": 27,
+        "size_mb": 52682.85
+      },
+      ".zip": {
+        "count": 19,
+        "size_mb": 14654.89
+      },
+      ".xls": {
+        "count": 8,
+        "size_mb": 18.57
+      },
+      ".dat": {
+        "count": 2,
+        "size_mb": 1.0
+      },
+      ".opt": {
+        "count": 2,
+        "size_mb": 4.91
+      },
+      ".sqlite": {
+        "count": 2,
+        "size_mb": 20.39
+      },
+      ".xml": {
+        "count": 2,
+        "size_mb": 0.0
+      },
+      ".xlsx": {
+        "count": 2,
+        "size_mb": 4.08
+      },
+      ".mov": {
+        "count": 1,
+        "size_mb": 2.39
+      },
+      ".conf": {
+        "count": 1,
+        "size_mb": 0.0
+      }
+    },
+    "subfolders": {
+      "release1-doj": {
+        "files": 99,
+        "size_mb": 76438.32,
+        "extensions": {
+          ".wav": {
+            "count": 56,
+            "size_mb": 10762.38
+          },
+          ".mp4": {
+            "count": 27,
+            "size_mb": 52682.85
+          },
+          ".zip": {
+            "count": 12,
+            "size_mb": 12990.28
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 0.09
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 2.54
+          },
+          ".sqlite": {
+            "count": 1,
+            "size_mb": 0.17
+          },
+          ".xml": {
+            "count": 1,
+            "size_mb": 0.0
+          }
+        }
+      },
+      "release3-additional-estate": {
+        "files": 42716,
+        "size_mb": 73753.21,
+        "extensions": {
+          "(no ext)": {
+            "count": 16680,
+            "size_mb": 49886.14
+          },
+          ".jpeg": {
+            "count": 15247,
+            "size_mb": 11070.47
+          },
+          ".jpg": {
+            "count": 7850,
+            "size_mb": 12691.71
+          },
+          ".txt": {
+            "count": 2895,
+            "size_mb": 53.77
+          },
+          ".tif": {
+            "count": 28,
+            "size_mb": 2.6
+          },
+          ".xls": {
+            "count": 8,
+            "size_mb": 18.57
+          },
+          ".xlsx": {
+            "count": 2,
+            "size_mb": 4.08
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 0.9
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 2.37
+          },
+          ".mov": {
+            "count": 1,
+            "size_mb": 2.39
+          },
+          ".conf": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".sqlite": {
+            "count": 1,
+            "size_mb": 20.22
+          },
+          ".xml": {
+            "count": 1,
+            "size_mb": 0.0
+          }
+        }
+      }
+    }
+  },
+  "huggingface": {
+    "files": 161,
+    "size": 628851812,
+    "extensions": {
+      ".metadata": {
+        "count": 70,
+        "size_mb": 0.01
+      },
+      ".pdf": {
+        "count": 56,
+        "size_mb": 120.52
+      },
+      "(no ext)": {
+        "count": 10,
+        "size_mb": 0.32
+      },
+      ".lock": {
+        "count": 8,
+        "size_mb": 0.0
+      },
+      ".incomplete": {
+        "count": 6,
+        "size_mb": 0.38
+      },
+      ".md": {
+        "count": 5,
+        "size_mb": 0.02
+      },
+      ".parquet": {
+        "count": 3,
+        "size_mb": 353.04
+      },
+      ".jsonl": {
+        "count": 1,
+        "size_mb": 21.56
+      },
+      ".csv": {
+        "count": 1,
+        "size_mb": 3.18
+      },
+      ".txt": {
+        "count": 1,
+        "size_mb": 100.69
+      }
+    },
+    "subfolders": {
+      "KillerShoaib-emails": {
+        "files": 2,
+        "size_mb": 29.4,
+        "extensions": {
+          ".jsonl": {
+            "count": 1,
+            "size_mb": 21.56
+          },
+          ".parquet": {
+            "count": 1,
+            "size_mb": 7.84
+          }
+        }
+      },
+      "elderemo-index": {
+        "files": 7,
+        "size_mb": 3.19,
+        "extensions": {
+          ".metadata": {
+            "count": 3,
+            "size_mb": 0.0
+          },
+          "(no ext)": {
+            "count": 2,
+            "size_mb": 0.0
+          },
+          ".md": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".csv": {
+            "count": 1,
+            "size_mb": 3.18
+          }
+        }
+      },
+      "muneeb-emails": {
+        "files": 7,
+        "size_mb": 4.36,
+        "extensions": {
+          ".metadata": {
+            "count": 3,
+            "size_mb": 0.0
+          },
+          "(no ext)": {
+            "count": 2,
+            "size_mb": 0.0
+          },
+          ".md": {
+            "count": 1,
+            "size_mb": 0.01
+          },
+          ".parquet": {
+            "count": 1,
+            "size_mb": 4.34
+          }
+        }
+      },
+      "svetfm-fbi": {
+        "files": 131,
+        "size_mb": 121.22,
+        "extensions": {
+          ".metadata": {
+            "count": 58,
+            "size_mb": 0.01
+          },
+          ".pdf": {
+            "count": 56,
+            "size_mb": 120.52
+          },
+          ".lock": {
+            "count": 8,
+            "size_mb": 0.0
+          },
+          ".incomplete": {
+            "count": 6,
+            "size_mb": 0.38
+          },
+          "(no ext)": {
+            "count": 2,
+            "size_mb": 0.31
+          },
+          ".md": {
+            "count": 1,
+            "size_mb": 0.0
+          }
+        }
+      },
+      "svetfm-nov11": {
+        "files": 7,
+        "size_mb": 340.86,
+        "extensions": {
+          ".metadata": {
+            "count": 3,
+            "size_mb": 0.0
+          },
+          "(no ext)": {
+            "count": 2,
+            "size_mb": 0.0
+          },
+          ".md": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".parquet": {
+            "count": 1,
+            "size_mb": 340.86
+          }
+        }
+      },
+      "teyler-20k": {
+        "files": 7,
+        "size_mb": 100.7,
+        "extensions": {
+          ".metadata": {
+            "count": 3,
+            "size_mb": 0.0
+          },
+          "(no ext)": {
+            "count": 2,
+            "size_mb": 0.0
+          },
+          ".txt": {
+            "count": 1,
+            "size_mb": 100.69
+          },
+          ".md": {
+            "count": 1,
+            "size_mb": 0.01
+          }
+        }
+      }
+    }
+  },
+  "kaggle": {
+    "files": 26091,
+    "size": 39512191244,
+    "extensions": {
+      ".jpg": {
+        "count": 22901,
+        "size_mb": 37338.68
+      },
+      ".txt": {
+        "count": 2896,
+        "size_mb": 53.77
+      },
+      ".tif": {
+        "count": 221,
+        "size_mb": 14.12
+      },
+      ".pdf": {
+        "count": 32,
+        "size_mb": 127.03
+      },
+      ".jsonl": {
+        "count": 26,
+        "size_mb": 119.86
+      },
+      ".xls": {
+        "count": 8,
+        "size_mb": 18.57
+      },
+      ".xlsx": {
+        "count": 2,
+        "size_mb": 4.08
+      },
+      ".dat": {
+        "count": 1,
+        "size_mb": 0.9
+      },
+      ".opt": {
+        "count": 1,
+        "size_mb": 2.37
+      },
+      ".mov": {
+        "count": 1,
+        "size_mb": 2.39
+      },
+      "(no ext)": {
+        "count": 1,
+        "size_mb": 0.0
+      },
+      ".md": {
+        "count": 1,
+        "size_mb": 0.0
+      }
+    },
+    "subfolders": {
+      "jazivxt": {
+        "files": 26063,
+        "size_mb": 37561.9,
+        "extensions": {
+          ".jpg": {
+            "count": 22901,
+            "size_mb": 37338.68
+          },
+          ".txt": {
+            "count": 2896,
+            "size_mb": 53.77
+          },
+          ".tif": {
+            "count": 221,
+            "size_mb": 14.12
+          },
+          ".pdf": {
+            "count": 32,
+            "size_mb": 127.03
+          },
+          ".xls": {
+            "count": 8,
+            "size_mb": 18.57
+          },
+          ".xlsx": {
+            "count": 2,
+            "size_mb": 4.08
+          },
+          ".dat": {
+            "count": 1,
+            "size_mb": 0.9
+          },
+          ".opt": {
+            "count": 1,
+            "size_mb": 2.37
+          },
+          ".mov": {
+            "count": 1,
+            "size_mb": 2.39
+          }
+        }
+      },
+      "linogova": {
+        "files": 28,
+        "size_mb": 119.86,
+        "extensions": {
+          ".jsonl": {
+            "count": 26,
+            "size_mb": 119.86
+          },
+          "(no ext)": {
+            "count": 1,
+            "size_mb": 0.0
+          },
+          ".md": {
+            "count": 1,
+            "size_mb": 0.0
+          }
+        }
+      }
+    }
+  },
+  "police-records": {
+    "files": 1,
+    "size": 1754628,
+    "extensions": {
+      ".pdf": {
+        "count": 1,
+        "size_mb": 1.67
+      }
+    },
+    "subfolders": {
+      "palm-beach": {
+        "files": 1,
+        "size_mb": 1.67,
+        "extensions": {
+          ".pdf": {
+            "count": 1,
+            "size_mb": 1.67
+          }
+        }
+      }
+    }
+  },
+  "reports": {
+    "files": 3,
+    "size": 6318304,
+    "extensions": {
+      ".pdf": {
+        "count": 3,
+        "size_mb": 6.03
+      }
+    },
+    "subfolders": {
+      "doj-disclosures": {
+        "files": 1,
+        "size_mb": 0.05,
+        "extensions": {
+          ".pdf": {
+            "count": 1,
+            "size_mb": 0.05
+          }
+        }
+      },
+      "doj-oig": {
+        "files": 1,
+        "size_mb": 5.7,
+        "extensions": {
+          ".pdf": {
+            "count": 1,
+            "size_mb": 5.7
+          }
+        }
+      },
+      "doj-opr": {
+        "files": 1,
+        "size_mb": 0.28,
+        "extensions": {
+          ".pdf": {
+            "count": 1,
+            "size_mb": 0.28
+          }
+        }
+      }
+    }
+  },
+  "scraped": {
+    "files": 4,
+    "size": 736710,
+    "extensions": {
+      ".jsonl": {
+        "count": 4,
+        "size_mb": 0.7
+      }
+    },
+    "subfolders": {
+      "epsteininvestigation.org": {
+        "files": 4,
+        "size_mb": 0.7,
+        "extensions": {
+          ".jsonl": {
+            "count": 4,
+            "size_mb": 0.7
+          }
+        }
+      }
+    }
+  },
+  "test": {
+    "files": 2,
+    "size": 26,
+    "extensions": {
+      ".txt": {
+        "count": 2,
+        "size_mb": 0.0
+      }
+    },
+    "subfolders": {}
+  },
+  "websites": {
+    "files": 1433,
+    "size": 56834858,
+    "extensions": {
+      ".json": {
+        "count": 1429,
+        "size_mb": 53.99
+      },
+      ".html": {
+        "count": 2,
+        "size_mb": 0.02
+      },
+      ".txt": {
+        "count": 1,
+        "size_mb": 0.18
+      },
+      ".csv": {
+        "count": 1,
+        "size_mb": 0.01
+      }
+    },
+    "subfolders": {
+      "archive-org-flights": {
+        "files": 1,
+        "size_mb": 0.18,
+        "extensions": {
+          ".txt": {
+            "count": 1,
+            "size_mb": 0.18
+          }
+        }
+      },
+      "blackbook": {
+        "files": 6,
+        "size_mb": 0.06,
+        "extensions": {
+          ".json": {
+            "count": 3,
+            "size_mb": 0.03
+          },
+          ".html": {
+            "count": 2,
+            "size_mb": 0.02
+          },
+          ".csv": {
+            "count": 1,
+            "size_mb": 0.01
+          }
+        }
+      },
+      "epstein-exposed": {
+        "files": 1426,
+        "size_mb": 53.96,
+        "extensions": {
+          ".json": {
+            "count": 1426,
+            "size_mb": 53.96
+          }
+        }
+      }
+    }
+  },
+  "zenodo": {
+    "files": 3957,
+    "size": 4385200267,
+    "extensions": {
+      ".jpg": {
+        "count": 3681,
+        "size_mb": 3822.3
+      },
+      ".pdf": {
+        "count": 206,
+        "size_mb": 355.08
+      },
+      ".tif": {
+        "count": 46,
+        "size_mb": 1.02
+      },
+      ".txt": {
+        "count": 17,
+        "size_mb": 0.64
+      },
+      ".zip": {
+        "count": 3,
+        "size_mb": 0.25
+      },
+      ".torrent": {
+        "count": 2,
+        "size_mb": 2.11
+      },
+      ".htm": {
+        "count": 1,
+        "size_mb": 0.01
+      },
+      ".json": {
+        "count": 1,
+        "size_mb": 0.63
+      }
+    },
+    "subfolders": {
+      "images": {
+        "files": 3727,
+        "size_mb": 3823.32,
+        "extensions": {
+          ".jpg": {
+            "count": 3681,
+            "size_mb": 3822.3
+          },
+          ".tif": {
+            "count": 46,
+            "size_mb": 1.02
+          }
+        }
+      },
+      "pdfs": {
+        "files": 205,
+        "size_mb": 347.35,
+        "extensions": {
+          ".pdf": {
+            "count": 205,
+            "size_mb": 347.35
+          }
+        }
+      },
+      "resources": {
+        "files": 2,
+        "size_mb": 0.62,
+        "extensions": {
+          ".txt": {
+            "count": 2,
+            "size_mb": 0.62
+          }
+        }
+      },
+      "text": {
+        "files": 15,
+        "size_mb": 0.02,
+        "extensions": {
+          ".txt": {
+            "count": 15,
+            "size_mb": 0.02
+          }
+        }
+      },
+      "web_sources": {
+        "files": 2,
+        "size_mb": 0.64,
+        "extensions": {
+          ".htm": {
+            "count": 1,
+            "size_mb": 0.01
+          },
+          ".json": {
+            "count": 1,
+            "size_mb": 0.63
+          }
+        }
+      }
+    }
+  }
+}
