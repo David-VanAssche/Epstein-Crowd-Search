@@ -244,10 +244,3 @@ export const PIPELINE_STAGE_INFO: StageInfo[] = [
   },
 ]
 
-/**
- * Total estimated cost to fully process one unit through all AI-powered stages.
- */
-export const TOTAL_COST_PER_PAGE = PIPELINE_STAGE_INFO.reduce((sum, s) => sum + s.costs.perPage, 0)
-export const TOTAL_COST_PER_IMAGE = PIPELINE_STAGE_INFO.reduce((sum, s) => sum + s.costs.perImage, 0)
-export const TOTAL_COST_PER_VIDEO_MINUTE = PIPELINE_STAGE_INFO.reduce((sum, s) => sum + s.costs.perVideoMinute, 0)
-export const TOTAL_COST_PER_AUDIO_MINUTE = PIPELINE_STAGE_INFO.reduce((sum, s) => sum + s.costs.perAudioMinute, 0)
