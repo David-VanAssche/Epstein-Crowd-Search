@@ -35,64 +35,36 @@ interface ImportStats {
 }
 
 async function listEmlFiles(): Promise<string[]> {
-  const allFiles: string[] = []
+  // Query storage_objects table instead of Storage .list() API.
+  // The Storage API fails on tranche subfolders with spaces/special chars.
+  // Uses ilike for case-insensitive matching (.eml / .EML).
+  // Filters linked_document_id IS NULL to skip already-processed files.
+  const allPaths: string[] = []
+  let offset = 0
+  const limit = 1000
 
-  // Supabase storage .list() is flat per folder — we need to list subfolders too
-  const topLevel = await supabase.storage.from('raw-archive').list(STORAGE_PREFIX, {
-    limit: 100000,
-    sortBy: { column: 'name', order: 'asc' },
-  })
+  while (true) {
+    const { data, error } = await supabase
+      .from('storage_objects')
+      .select('path')
+      .like('path', 'github/erikveland/%')
+      .eq('extension', '.eml')
+      .is('linked_document_id', null)
+      .order('path')
+      .range(offset, offset + limit - 1)
 
-  if (topLevel.error) {
-    console.error('Error listing top-level:', topLevel.error)
-    return []
-  }
-
-  for (const item of topLevel.data || []) {
-    if (item.name.startsWith('.')) continue
-
-    if (item.metadata && item.metadata.mimetype) {
-      // It's a file
-      if (item.name.toLowerCase().endsWith('.eml')) {
-        allFiles.push(`${STORAGE_PREFIX}/${item.name}`)
-      }
-    } else {
-      // It's a folder — list its contents recursively
-      const subFiles = await listFolderRecursive(`${STORAGE_PREFIX}/${item.name}`)
-      allFiles.push(...subFiles)
+    if (error) {
+      console.error('Error querying storage_objects:', error)
+      break
     }
+    if (!data?.length) break
+
+    allPaths.push(...data.map((r: { path: string }) => r.path))
+    offset += data.length
+    if (data.length < limit) break
   }
 
-  return allFiles
-}
-
-async function listFolderRecursive(path: string): Promise<string[]> {
-  const files: string[] = []
-
-  const { data, error } = await supabase.storage.from('raw-archive').list(path, {
-    limit: 100000,
-    sortBy: { column: 'name', order: 'asc' },
-  })
-
-  if (error) {
-    console.error(`Error listing ${path}:`, error)
-    return []
-  }
-
-  for (const item of data || []) {
-    if (item.name.startsWith('.')) continue
-
-    if (item.metadata && item.metadata.mimetype) {
-      if (item.name.toLowerCase().endsWith('.eml')) {
-        files.push(`${path}/${item.name}`)
-      }
-    } else {
-      const subFiles = await listFolderRecursive(`${path}/${item.name}`)
-      files.push(...subFiles)
-    }
-  }
-
-  return files
+  return allPaths
 }
 
 async function downloadEml(path: string): Promise<ArrayBuffer | null> {
